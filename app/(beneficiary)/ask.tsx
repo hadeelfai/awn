@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { voiceDemos } from '../../src/services/ai';
-import { AppText, Card, Field, LangSwitch, SpeakBtn, StatusPill, useUi } from '../../src/ui';
 import { radius, space } from '../../src/theme';
+import { AppText, Card, Field, LangSwitch, SpeakBtn, StatusPill, useUi } from '../../src/ui';
 
 export default function Ask() {
   const insets = useSafeAreaInsets();
@@ -19,13 +19,12 @@ export default function Ask() {
     sendUser,
     sendOption,
     appointments,
-    requests,
-    answerMoreInfo,
+    documents,
+    addDocument,
   } = useUi();
   const [text, setText] = useState('');
   const [voice, setVoice] = useState(false);
   const scroll = useRef<ScrollView>(null);
-  const pendingInfo = requests.find((r) => r.patientId === 'PAT-1001' && r.status === 'more_info');
 
   useEffect(() => {
     scroll.current?.scrollToEnd({ animated: true });
@@ -34,10 +33,42 @@ export default function Ask() {
   const submit = (value?: string) => {
     const v = (value ?? text).trim();
     if (!v) return;
-    if (pendingInfo) answerMoreInfo(pendingInfo.id, v);
     sendUser(v);
     setText('');
     setVoice(false);
+  };
+
+  const handleUploadReport = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+      });
+      if (result.canceled) return;
+      
+      // Simulate document explanation
+      const newDocument = {
+        id: `DOC-${Date.now()}`,
+        titleAr: 'تقرير طبي محمل',
+        titleEn: 'Uploaded medical report',
+        kind: 'report' as const,
+        originalName: result.assets[0].name,
+        findings: [
+          {
+            nameAr: 'قيمة طبيعية',
+            nameEn: 'Normal value',
+            value: 'Within range',
+            unit: 'N/A',
+            simpleAr: 'القيمة ضمن النطاق الطبيعي',
+            simpleEn: 'Value is within normal range',
+          },
+        ],
+        createdAt: new Date().toISOString(),
+      };
+      
+      addDocument(newDocument);
+    } catch (error) {
+      console.error('Error picking document:', error);
+    }
   };
 
   return (
@@ -82,14 +113,40 @@ export default function Ask() {
                     </View>
                   ) : null}
                 </View>
+                {m.suggestedAppointment && (
+                  <Card key={m.suggestedAppointment.id} style={{ marginTop: 8, width: '92%' }} onPress={() => router.push({ pathname: '/(beneficiary)/appointment/[id]', params: { id: m.suggestedAppointment!.id, from: 'ask' } })}>
+                    <View style={[row, { justifyContent: 'space-between', alignItems: 'center' }]}>
+                      <AppText weight="700">{locale === 'ar' ? m.suggestedAppointment.specialtyAr : m.suggestedAppointment.specialtyEn}</AppText>
+                      <StatusPill label={tt('upcoming')} tone="warning" />
+                    </View>
+                    <AppText muted style={{ marginTop: 4 }}>
+                      {m.suggestedAppointment.date} · {m.suggestedAppointment.time}
+                    </AppText>
+                    <AppText muted>
+                      {locale === 'ar' ? m.suggestedAppointment.facilityAr : m.suggestedAppointment.facilityEn}
+                    </AppText>
+                  </Card>
+                )}
                 {m.appointmentIds?.map((id) => {
                   const a = appointments.find((x) => x.id === id);
                   if (!a) return null;
                   return (
-                    <Card key={id} style={{ marginTop: 8, width: '92%' }} onPress={() => router.push(`/(beneficiary)/guide/appointment/${id}`)}>
+                    <Card key={id} style={{ marginTop: 8, width: '92%' }} onPress={() => router.push({ pathname: '/(beneficiary)/appointment/[id]', params: { id, from: 'ask' } })}>
                       <AppText weight="700">{locale === 'ar' ? a.specialtyAr : a.specialtyEn}</AppText>
                       <AppText muted>
                         {a.date} · {a.time} · {locale === 'ar' ? a.facilityAr : a.facilityEn}
+                      </AppText>
+                    </Card>
+                  );
+                })}
+                {m.documentIds?.map((id) => {
+                  const doc = documents.find((d) => d.id === id);
+                  if (!doc) return null;
+                  return (
+                    <Card key={id} style={{ marginTop: 8, width: '92%' }} onPress={() => router.push(`/(beneficiary)/report/${id}`)}>
+                      <AppText weight="700">{locale === 'ar' ? doc.titleAr : doc.titleEn}</AppText>
+                      <AppText muted>
+                        {doc.originalName} · {doc.createdAt.slice(0, 10)}
                       </AppText>
                     </Card>
                   );
@@ -111,10 +168,11 @@ export default function Ask() {
                       key={a.id}
                       onPress={() => {
                         if (a.kind === 'navigate' && a.href) router.push(a.href as any);
-                        else if (a.kind === 'intent' && a.intent === 'specialty') submit(locale === 'ar' ? 'ما أعرف أي تخصص أحتاج' : "I don't know which specialty I need");
-                        else if (a.kind === 'intent' && a.intent === 'prep') submit(locale === 'ar' ? 'أبغى أعرف كيف أستعد لموعدي' : 'How do I prepare for my appointment?');
-                        else if (a.kind === 'create_request') submit(locale === 'ar' ? 'أرسل لمختص' : 'Send to a specialist');
-                        else if (a.kind === 'show_appointments') router.push('/(beneficiary)/guide/appointments');
+                        else if (a.kind === 'intent' && a.intent === 'book_appointment') submit(locale === 'ar' ? 'أريد حجز موعد' : 'I want to book an appointment');
+                        else if (a.kind === 'intent' && a.intent === 'general_info') submit(locale === 'ar' ? 'معلومات عامة' : 'General information');
+                        else if (a.kind === 'confirm_booking') submit(locale === 'ar' ? 'نعم، تأكيد' : 'Yes, confirm');
+                        else if (a.kind === 'upload_report') handleUploadReport();
+                        else if (a.kind === 'show_appointments') router.push('/(beneficiary)/appointments');
                       }}
                       style={{ backgroundColor: palette.tealDark, paddingHorizontal: 14, paddingVertical: 10, borderRadius: radius.pill }}
                     >

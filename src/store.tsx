@@ -1,32 +1,28 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import * as Speech from 'expo-speech';
-import { bookingSlots, demoLab, initialAppointments, initialNotifications, initialPrescriptions, initialRequests, PATIENT } from './data/seed';
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { demoLab, initialAppointments, initialNotifications, initialPrescriptions, PATIENT } from './data/seed';
+import { greeting, optionToUserText, respond, type AIResult } from './services/ai';
 import { colors, highContrastColors } from './theme';
-import { greeting, makeRequestPayload, optionToUserText, respond, startIntake, type AIResult } from './services/ai';
 import type {
-  Appointment,
-  AppNotification,
-  ChatMessage,
-  ChatOption,
-  ExplainedDocument,
-  FeedbackItem,
-  IntakeState,
-  Locale,
-  Prescription,
-  Role,
-  SpecialistRequest,
+    AppNotification,
+    Appointment,
+    ChatMessage,
+    ChatOption,
+    ExplainedDocument,
+    FeedbackItem,
+    IntakeState,
+    Locale,
+    Prescription,
 } from './types';
 
 type FontScale = 1 | 1.15 | 1.3;
 
 type State = {
   locale: Locale;
-  role: Role | null;
   fontScale: FontScale;
   highContrast: boolean;
   appointments: Appointment[];
   prescriptions: Prescription[];
-  requests: SpecialistRequest[];
   notifications: AppNotification[];
   messages: ChatMessage[];
   intake: IntakeState;
@@ -47,12 +43,10 @@ function useAppValue() {
       document.documentElement.lang = l;
     }
   }, []);
-  const [role, setRole] = useState<Role | null>(null);
   const [fontScale, setFontScale] = useState<FontScale>(1.15);
   const [highContrast, setHighContrast] = useState(false);
   const [appointments, setAppointments] = useState(initialAppointments);
   const [prescriptions, setPrescriptions] = useState(initialPrescriptions);
-  const [requests, setRequests] = useState(initialRequests);
   const [notifications, setNotifications] = useState(initialNotifications);
   const [messages, setMessages] = useState<ChatMessage[]>([greeting('ar')]);
   const [intake, setIntake] = useState<IntakeState>({ step: 0 });
@@ -89,23 +83,26 @@ function useAppValue() {
     (result: AIResult) => {
       setMessages((prev) => [...prev, result.reply]);
       if (result.intake) setIntake(result.intake);
-      if (result.createRequest) {
-        const payload = makeRequestPayload(result.createRequest);
-        const id = `REQ-${2400 + Math.floor(Math.random() * 80)}`;
-        const request: SpecialistRequest = {
-          ...payload,
-          id,
-          createdAt: new Date().toISOString(),
-          status: 'new',
-        };
-        setRequests((prev) => [request, ...prev]);
+      if (result.suggestedAppointment) {
+        setAppointments((prev) => [result.suggestedAppointment, ...prev]);
         pushNotification({
-          type: 'specialist_response',
-          titleAr: 'تم إرسال طلبك إلى مختص',
-          titleEn: 'Your request was sent to a specialist',
-          bodyAr: 'عون لا يتخذ القرار الطبي. ستصلك نتيجة المراجعة هنا.',
-          bodyEn: 'Aoun does not make the medical decision. You will see the review outcome here.',
-          href: '/(beneficiary)/notifications',
+          type: 'appointment_update',
+          titleAr: 'تم حجز موعد جديد',
+          titleEn: 'New appointment booked',
+          bodyAr: `تم حجز موعد ${result.suggestedAppointment.specialtyAr} في ${result.suggestedAppointment.date}`,
+          bodyEn: `Appointment booked for ${result.suggestedAppointment.specialtyEn} on ${result.suggestedAppointment.date}`,
+          href: `/(beneficiary)/appointment/${result.suggestedAppointment.id}`,
+        });
+      }
+      if (result.createDocument) {
+        setDocuments((prev) => [result.createDocument, ...prev]);
+        pushNotification({
+          type: 'appointment_update',
+          titleAr: 'تم شرح تقرير جديد',
+          titleEn: 'New report explained',
+          bodyAr: `تم إضافة تقرير ${result.createDocument.titleAr} إلى قسم فهمني`,
+          bodyEn: `Report ${result.createDocument.titleEn} added to Explain to Me`,
+          href: `/(beneficiary)/report/${result.createDocument.id}`,
         });
       }
     },
@@ -156,109 +153,11 @@ function useAppValue() {
     });
   }, [pushNotification]);
 
-  const bookSlot = useCallback(
-    (slotId: string) => {
-      const slot = bookingSlots.find((s) => s.id === slotId);
-      if (!slot) return;
-      const apt: Appointment = {
-        id: `APT-${Math.floor(Math.random() * 900 + 300)}`,
-        specialtyAr: slot.serviceAr,
-        specialtyEn: slot.serviceEn,
-        doctorAr: 'يُحدد عند الحضور',
-        doctorEn: 'Assigned at check-in',
-        facilityAr: slot.facilityAr,
-        facilityEn: slot.facilityEn,
-        locationAr: slot.facilityAr,
-        locationEn: slot.facilityEn,
-        date: slot.date,
-        time: slot.time,
-        status: 'upcoming',
-        preparationAr: ['أحضر الهوية.', 'وصل قبل الموعد بـ 15 دقيقة.'],
-        preparationEn: ['Bring your ID.', 'Arrive 15 minutes early.'],
-      };
-      setAppointments((prev) => [apt, ...prev]);
-      pushNotification({
-        type: 'appointment_update',
-        titleAr: 'تم تحديث مواعيدك',
-        titleEn: 'Your appointments were updated',
-        bodyAr: `أُضيف موعد ${slot.serviceAr} في ${slot.date} الساعة ${slot.time}. هل ترغب في الاطلاع على الموعد الجديد؟`,
-        bodyEn: `${slot.serviceEn} was added on ${slot.date} at ${slot.time}. Would you like to view it?`,
-        href: `/(beneficiary)/guide/appointment/${apt.id}`,
-      });
-      setPendingFeedback('booking');
-      return apt.id;
-    },
-    [pushNotification]
-  );
-
-  const approveRequest = useCallback(
-    (id: string, serviceAr?: string, serviceEn?: string) => {
-      setRequests((prev) =>
-        prev.map((r) =>
-          r.id === id
-            ? {
-                ...r,
-                status: 'approved' as const,
-                approvedServiceAr: serviceAr || r.approvedServiceAr || 'طب الأسرة — موعد روتيني',
-                approvedServiceEn: serviceEn || r.approvedServiceEn || 'Family medicine — routine visit',
-              }
-            : r
-        )
-      );
-      const req = requests.find((r) => r.id === id);
-      if (req?.patientId === PATIENT.id) {
-        setBookingUnlocked(true);
-        pushNotification({
-          type: 'specialist_response',
-          titleAr: 'تمت مراجعة طلبك',
-          titleEn: 'Your request was reviewed',
-          bodyAr: 'يمكنك الآن اختيار الموعد المناسب. عون لا يغني عن تعليمات المختص.',
-          bodyEn: 'You can now choose a suitable appointment. Aoun does not replace specialist instructions.',
-          href: '/(beneficiary)/guide/book',
-        });
-      }
-    },
-    [pushNotification, requests]
-  );
-
-  const modifyRequest = useCallback(
-    (id: string, serviceAr: string, serviceEn: string) => {
-      approveRequest(id, serviceAr, serviceEn);
-      setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status: 'modified' } : r)));
-    },
-    [approveRequest]
-  );
-
-  const askMoreInfo = useCallback(
-    (id: string, question: string) => {
-      setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status: 'more_info', extraQuestion: question } : r)));
-      const req = requests.find((r) => r.id === id);
-      if (req?.patientId === PATIENT.id) {
-        pushNotification({
-          type: 'more_info',
-          titleAr: 'المختص يحتاج معلومات إضافية',
-          titleEn: 'The specialist needs more information',
-          bodyAr: question,
-          bodyEn: question,
-          href: '/(beneficiary)/ask',
-        });
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `sys-${Date.now()}`,
-            role: 'aoun',
-            textAr: `المختص يطلب معلومات إضافية: ${question}\nيمكنك الرد هنا وسأعيد إرفاق الإجابة بالطلب.`,
-            textEn: `The specialist asked: ${question}\nYou can reply here and I will attach your answer to the request.`,
-            createdAt: new Date().toISOString(),
-          },
-        ]);
-      }
-    },
-    [pushNotification, requests]
-  );
-
-  const answerMoreInfo = useCallback((requestId: string, answer: string) => {
-    setRequests((prev) => prev.map((r) => (r.id === requestId ? { ...r, extraAnswer: answer, status: 'pending' } : r)));
+  const bookAppointment = useCallback((details: Omit<Appointment, 'id' | 'status'>) => {
+    const apt: Appointment = { id: `APT-${Math.floor(Math.random() * 900 + 300)}`, status: 'upcoming', ...details };
+    setAppointments((prev) => [apt, ...prev]);
+    setPendingFeedback('booking');
+    return apt.id;
   }, []);
 
   const addDocument = useCallback((doc: ExplainedDocument) => {
@@ -281,21 +180,15 @@ function useAppValue() {
   const unread = notifications.filter((n) => !n.read).length;
   const stats = useMemo(() => {
     return {
-      neu: requests.filter((r) => r.status === 'new').length,
-      pending: requests.filter((r) => r.status === 'pending').length,
-      approved: requests.filter((r) => r.status === 'approved' || r.status === 'modified').length,
-      more: requests.filter((r) => r.status === 'more_info').length,
       satisfaction:
         feedback.length === 0 ? 0 : Math.round((feedback.reduce((s, f) => s + f.rating, 0) / feedback.length) * 10) / 10,
       journeys: 18 + feedback.length,
     };
-  }, [feedback, requests]);
+  }, [feedback]);
 
   return {
     locale,
     setLocale,
-    role,
-    setRole,
     fontScale,
     setFontScale,
     highContrast,
@@ -306,7 +199,6 @@ function useAppValue() {
     speak,
     appointments,
     prescriptions,
-    requests,
     notifications,
     messages,
     intake,
@@ -323,16 +215,11 @@ function useAppValue() {
     resetChat,
     markNotification,
     setReminder,
-    bookSlot,
-    approveRequest,
-    modifyRequest,
-    askMoreInfo,
-    answerMoreInfo,
+    bookAppointment,
     addDocument,
     addPrescriptionFromScan,
     addFeedback,
     PATIENT,
-    bookingSlots,
   };
 }
 

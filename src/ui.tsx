@@ -4,15 +4,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React from 'react';
 import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  type StyleProp,
-  type TextStyle,
-  type ViewStyle,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+    type StyleProp,
+    type TextStyle,
+    type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { I18nKey, t } from './i18n';
@@ -164,25 +164,27 @@ export function TopBar({
   title,
   subtitle,
   back,
+  onBack,
   right,
 }: {
   title: string;
   subtitle?: string;
   back?: boolean;
+  onBack?: () => void;
   right?: React.ReactNode;
 }) {
-  const { palette, row, tt, unread, role, isRTL } = useUi();
+  const { palette, row, tt, unread } = useUi();
   return (
     <View style={[row, { alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, gap: 12 }]}>
       <View style={[row, { alignItems: 'center', gap: 10, flex: 1 }]}>
         {back ? (
           <Pressable
-            onPress={() => router.back()}
+            onPress={onBack ?? (() => router.back())}
             accessibilityLabel={tt('back')}
             hitSlop={12}
             style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: palette.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: palette.border }}
           >
-            <Ionicons name={isRTL ? 'chevron-forward' : 'chevron-back'} size={22} color={palette.ink} />
+            <Ionicons name="chevron-back" size={22} color={palette.ink} />
           </Pressable>
         ) : (
           <Image source={require('../assets/brand/logo.png')} style={{ width: 36, height: 36 }} contentFit="contain" />
@@ -200,8 +202,6 @@ export function TopBar({
       </View>
       {right !== undefined ? (
         right
-      ) : role === 'specialist' ? (
-        <LangSwitch />
       ) : (
         <Pressable
           onPress={() => router.push('/(beneficiary)/notifications')}

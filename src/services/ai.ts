@@ -1,5 +1,4 @@
-import { PATIENT } from '../data/seed';
-import type { Appointment, ChatAction, ChatMessage, ChatOption, IntakeState, Locale, Priority, SpecialistRequest } from '../types';
+import type { Appointment, ChatAction, ChatMessage, ChatOption, ExplainedDocument, IntakeState, Locale, Priority } from '../types';
 
 const uid = () => `m-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
 
@@ -52,33 +51,20 @@ const urgencyOptions: ChatOption[] = [
 export type AIResult = {
   reply: ChatMessage;
   intake?: IntakeState;
-  createRequest?: Omit<SpecialistRequest, 'id' | 'createdAt' | 'status' | 'patientId' | 'patientNameAr' | 'patientNameEn'>;
   showAppointments?: boolean;
+  suggestedAppointment?: Appointment;
+  createDocument?: ExplainedDocument;
 };
 
 export function greeting(locale: Locale): ChatMessage {
   return msg({
     role: 'aoun',
-    textAr: 'مرحبًا، أنا عون. أقدر أساعدك في الإجراءات، المواعيد، الوصفات، وشرح المعلومات الصحية بلغة بسيطة. لا أشخص الأمراض ولا أصف العلاج.',
-    textEn: 'Hello, I am Aoun. I can help with procedures, appointments, prescriptions, and simple explanations. I do not diagnose or prescribe treatment.',
+    textAr: 'مرحبًا، أنا عون. أقدر أساعدك في الاستفسارات الصحية العامة، حجز المواعيد، وشرح التقارير الطبية بلغة بسيطة. لا أشخص الأمراض ولا أصف العلاج.',
+    textEn: 'Hello, I am Aoun. I can help with general health inquiries, booking appointments, and explaining medical reports in simple language. I do not diagnose or prescribe treatment.',
     actions: [
-      { id: 'a1', kind: 'intent', intent: 'specialty', labelAr: 'ما أعرف أي تخصص أحتاج', labelEn: "I don't know which specialty I need" },
-      { id: 'a2', kind: 'intent', intent: 'prep', labelAr: 'كيف أستعد لموعدي؟', labelEn: 'How do I prepare for my visit?' },
-      { id: 'a3', kind: 'navigate', href: '/(beneficiary)/guide/medications', labelAr: 'صرف وصفة', labelEn: 'Fill a prescription' },
-    ],
-  });
-}
-
-function refuseMedical(): ChatMessage {
-  return msg({
-    role: 'aoun',
-    textAr:
-      'هذا السؤال يحتاج حكمًا طبيًا. لا أستطيع التشخيص أو تغيير الجرعة أو اقتراح خطة علاج. يمكنني تنظيم معلوماتك وإرسالها إلى مختص لمراجعتها واعتمادها.',
-    textEn:
-      'This needs medical judgment. I cannot diagnose, change a dose, or recommend a treatment plan. I can organize your information and send it to a specialist for review and approval.',
-    disclaimer: true,
-    actions: [
-      { id: 'spec', kind: 'create_request', labelAr: 'إرسال لمختص', labelEn: 'Send to a specialist' },
+      { id: 'a1', kind: 'intent', intent: 'book_appointment', labelAr: 'أريد حجز موعد', labelEn: 'I want to book an appointment' },
+      { id: 'a2', kind: 'navigate', href: '/(beneficiary)/explain', labelAr: 'شرح تقرير طبي', labelEn: 'Explain a medical report' },
+      { id: 'a3', kind: 'navigate', href: '/(beneficiary)/appointments', labelAr: 'مواعيدي', labelEn: 'My appointments' },
     ],
   });
 }
@@ -86,139 +72,80 @@ function refuseMedical(): ChatMessage {
 export function respond(input: string, intake: IntakeState, appointments: Appointment[]): AIResult {
   const n = norm(input);
 
-  if (intake.step > 0 && intake.step < 4) {
+  if (intake.step > 0 && intake.step < 5) {
     return continueIntake(n, intake, input);
   }
 
-  if (/(شخص|مرض عندي|عندي مرض|diagnose|do i have|is this cancer|جرعه|dosage|علاج لي|prescribe|treatment plan|ارسل لمختص|send to a specialist)/.test(n)) {
-    if (/(ارسل لمختص|send to a specialist)/.test(n)) {
-      return {
-        createRequest: {
-          type: 'medical_question',
-          priority: 'routine',
-          originalText: input,
-          reasonAr: 'المستفيد طلب مراجعة مختص لسؤال يحتاج حكمًا طبيًا.',
-          reasonEn: 'The beneficiary asked a specialist to review a question that needs medical judgment.',
-          providedAr: ['طلب تحويل لمختص من المحادثة.'],
-          providedEn: ['Escalation requested from the conversation.'],
-          missingAr: ['تفاصيل سريرية يضيفها المختص عند الحاجة.'],
-          missingEn: ['Clinical details the specialist may still request.'],
-          aiNextStepAr: 'مراجعة المختص ثم الرد على المستفيد.',
-          aiNextStepEn: 'Specialist review, then a response to the beneficiary.',
-        },
-        reply: msg({
-          role: 'aoun',
-          textAr: 'تم تجهيز الطلب وإرساله إلى مختص. لن أقدّم تشخيصًا أو قرار علاج.',
-          textEn: 'The request was prepared and sent to a specialist. I will not provide a diagnosis or treatment decision.',
-          disclaimer: true,
-        }),
-      };
-    }
-    return { reply: refuseMedical() };
+  // Handle appointment booking requests
+  if (/(احجز|موعد جديد|book appointment|new appointment|حجز موعد|need appointment)/.test(n)) {
+    return startAppointmentIntake();
   }
 
-  if (/(ما اعرف|ما ادري|اي تخصص|which specialty|don't know which|dont know which|مو عارف)/.test(n)) {
-    return startIntake();
-  }
-
-  if (/(غير موعد|اغير موعد|تغيير موعد|reschedule|change (my )?appointment)/.test(n)) {
-    const upcoming = appointments.filter((a) => a.status === 'upcoming' || a.status === 'updated');
-    if (upcoming.length === 0) {
-      return {
-        reply: msg({
-          role: 'aoun',
-          textAr: 'ما لقيت موعدًا قادمًا مرتبطًا بحسابك. هل تريد طلب موعد جديد؟ هذا قد يحتاج مراجعة مختص إذا لم تحدد الخدمة.',
-          textEn: 'I could not find an upcoming appointment on your account. Do you want to request a new visit? That may need specialist review if the service is unclear.',
-        }),
-      };
-    }
+  // Handle report upload/explanation requests
+  if (/(شرح تقرير|تحليل|نتيجة|explain report|lab result|upload report|رفع تقرير)/.test(n)) {
     return {
-      showAppointments: true,
       reply: msg({
         role: 'aoun',
-        textAr: 'أكيد. أي موعد ترغب في تغييره؟ اختر من مواعيدك القادمة — لن أغيّر الموعد مباشرة قبل المراجعة الإدارية.',
-        textEn: 'Of course. Which appointment would you like to change? Choose from your upcoming visits — I will not change it until administrative review.',
-        appointmentIds: upcoming.map((a) => a.id),
-        actions: [{ id: 'apps', kind: 'show_appointments', labelAr: 'فتح مواعيدي', labelEn: 'Open My Appointments' }],
+        textAr: 'يمكنك رفع تقريرك الطبي وسأشرحه لك بلغة بسيطة. اضغط على زر الرفع أدناه.',
+        textEn: 'You can upload your medical report and I will explain it in simple language. Click the upload button below.',
+        actions: [
+          { id: 'upload', kind: 'upload_report', labelAr: 'رفع تقرير', labelEn: 'Upload report' },
+        ],
       }),
     };
   }
 
-  if (/(استعد|تحضير|prep|prepare)/.test(n)) {
+  // Handle general health inquiries
+  if (/(ألم|pain|صداع|headache|حرارة|fever|سعال|cough|دوخة|dizziness|تعب|fatigue)/.test(n)) {
+    return handleHealthInquiry(n);
+  }
+
+  // Handle appointment viewing
+  if (/(مواعيدي|appointments|مواعيد)/.test(n)) {
+    return {
+      showAppointments: true,
+      reply: msg({
+        role: 'aoun',
+        textAr: 'إليك مواعيدك الحالية:',
+        textEn: 'Here are your current appointments:',
+        appointmentIds: appointments.map((a) => a.id),
+        actions: [{ id: 'apps', kind: 'navigate', href: '/(beneficiary)/appointments', labelAr: 'عرض المواعيد', labelEn: 'View appointments' }],
+      }),
+    };
+  }
+
+  // Handle appointment preparation
+  if (/(استعد|تحضير|prepare|preparation)/.test(n)) {
     const next = appointments.find((a) => a.status === 'upcoming' || a.status === 'updated');
     return {
       reply: msg({
         role: 'aoun',
         textAr: next
-          ? `أكيد، أقدر أساعدك بمعرفة التحضيرات المرتبطة بموعدك في ${next.facilityAr} يوم ${next.date} الساعة ${next.time}.`
-          : 'أكيد، أقدر أساعدك بمعرفة التحضيرات المرتبطة بموعدك عندما يتوفر موعد قادم.',
+          ? `إليك التحضيرات لموعدك في ${next.facilityAr} يوم ${next.date} الساعة ${next.time}.`
+          : 'ليس لديك موعد قادم حاليًا.',
         textEn: next
-          ? `I can show the preparations for your visit at ${next.facilityEn} on ${next.date} at ${next.time}.`
-          : 'I can show preparations when you have an upcoming visit.',
+          ? `Here are the preparations for your appointment at ${next.facilityEn} on ${next.date} at ${next.time}.`
+          : 'You do not have an upcoming appointment currently.',
         appointmentIds: next ? [next.id] : undefined,
         actions: next
-          ? [{ id: 'prep', kind: 'navigate', href: `/(beneficiary)/guide/appointment/${next.id}`, labelAr: 'عرض التحضيرات', labelEn: 'View preparations' }]
+          ? [{ id: 'view', kind: 'navigate', href: `/(beneficiary)/appointment/${next.id}`, labelAr: 'عرض التفاصيل', labelEn: 'View details' }]
           : undefined,
       }),
     };
   }
 
-  if (/(وصفه|صرف|صيدلي|prescription|pharmacy|medication|دواء)/.test(n)) {
-    return {
-      reply: msg({
-        role: 'aoun',
-        textAr: 'تمام. لصرف الوصفة أو معرفة المنشآت القريبة انتقل إلى وجّهني ← الأدوية والوصفات. بيانات التوفّر في الخريطة تجريبية للعرض.',
-        textEn: 'For filling a prescription or nearby facilities, go to Guide Me → Medications. Map availability is demo data.',
-        actions: [
-          { id: 'meds', kind: 'navigate', href: '/(beneficiary)/guide/medications', labelAr: 'الأدوية والوصفات', labelEn: 'Medications & prescriptions' },
-          { id: 'map', kind: 'navigate', href: '/(beneficiary)/guide/map', labelAr: 'الخريطة', labelEn: 'Map' },
-        ],
-      }),
-    };
-  }
-
-  if (/(تحليل|نتيجه|تقرير|hemoglobin|lab result|explain|فهمني|وش معنى)/.test(n)) {
-    return {
-      reply: msg({
-        role: 'aoun',
-        textAr: 'أقدر أشرح التقرير أو النتيجة بلغة مبسطة في قسم فهمني، بدون تشخيص. إذا احتجت حكمًا طبيًا سأحوّل الطلب لمختص.',
-        textEn: 'I can explain a report in simple language in Explain to Me, without diagnosing. If you need medical judgment I will send a specialist request.',
-        actions: [{ id: 'ex', kind: 'navigate', href: '/(beneficiary)/explain', labelAr: 'فتح فهمني', labelEn: 'Open Explain to Me' }],
-      }),
-    };
-  }
-
-  if (/(المواعيد|appointments)/.test(n) && !/(غير|change|اغير)/.test(n)) {
-    return {
-      reply: msg({
-        role: 'aoun',
-        textAr: 'يمكنك متابعة مواعيدك وتحضيراتك من وجّهني.',
-        textEn: 'You can follow appointments and preparations from Guide Me.',
-        actions: [{ id: 'ap', kind: 'navigate', href: '/(beneficiary)/guide/appointments', labelAr: 'مواعيدي', labelEn: 'My appointments' }],
-      }),
-    };
-  }
-
-  if (/(موعد جديد|احجز|book|appointment)/.test(n) && !/(غير|change)/.test(n)) {
-    return {
-      reply: msg({
-        role: 'aoun',
-        textAr: 'إذا كنت تعرف الخدمة المطلوبة يمكن المتابعة للحجز الإداري. إذا لم تعرف التخصص المناسب سأسألك أسئلة ثم أرسل الملخص لمختص — أنا لا أقرر التخصص نيابة عن الطبيب.',
-        textEn: 'If you already know the service, we can continue with administrative booking. If the specialty is unclear I will ask questions and send a summary to a specialist — I do not decide the specialty.',
-        actions: [
-          { id: 'book', kind: 'navigate', href: '/(beneficiary)/guide/book', labelAr: 'أعرف الخدمة — متابعة الحجز', labelEn: 'I know the service — book' },
-          { id: 'spec', kind: 'intent', intent: 'specialty', labelAr: 'ما أعرف التخصص', labelEn: "I don't know the specialty" },
-        ],
-      }),
-    };
-  }
-
+  // Default response for general inquiries
   if (n.length < 4) {
     return {
       reply: msg({
         role: 'aoun',
-        textAr: 'أقدر أساعدك، لكن أحتاج جملة أوضح: هل تقصد موعدًا، وصفة، أم شرح نتيجة؟',
-        textEn: 'I can help, but I need a clearer request: is this about an appointment, a prescription, or explaining a result?',
+        textAr: 'أقدر أساعدك في الاستفسارات الصحية وحجز المواعيد وشرح التقارير. كيف يمكنني مساعدتك؟',
+        textEn: 'I can help with health inquiries, booking appointments, and explaining reports. How can I help you?',
+        options: [
+          { id: 'book', labelAr: 'حجز موعد', labelEn: 'Book appointment' },
+          { id: 'report', labelAr: 'شرح تقرير', labelEn: 'Explain report' },
+          { id: 'health', labelAr: 'استفسار صحي', labelEn: 'Health inquiry' },
+        ],
       }),
     };
   }
@@ -226,13 +153,11 @@ export function respond(input: string, intake: IntakeState, appointments: Appoin
   return {
     reply: msg({
       role: 'aoun',
-      textAr: 'أقدر أساعدك في الإجراءات والتوجيه وشرح المعلومات. هل تقصد مواعيدك، صرف دواء، فهم تقرير، أم أنك غير متأكد من الخدمة المناسبة؟',
-      textEn: 'I can help with procedures, guidance, and explanations. Do you mean appointments, dispensing medication, understanding a report, or are you unsure which service you need?',
+      textAr: 'أقدر مساعدتك في هذا الاستفسار. هل تريد حجز موعد لهذه المشكلة، أم تحتاج معلومات عامة؟',
+      textEn: 'I can help you with this inquiry. Would you like to book an appointment for this issue, or do you need general information?',
       options: [
-        { id: 'apps', labelAr: 'المواعيد', labelEn: 'Appointments' },
-        { id: 'rx', labelAr: 'الأدوية', labelEn: 'Medications' },
-        { id: 'ex', labelAr: 'شرح تقرير', labelEn: 'Explain a report' },
-        { id: 'unk', labelAr: 'غير متأكد من التخصص', labelEn: 'Unsure about specialty' },
+        { id: 'book', labelAr: 'حجز موعد', labelEn: 'Book appointment' },
+        { id: 'info', labelAr: 'معلومات عامة', labelEn: 'General information' },
       ],
     }),
   };
@@ -250,69 +175,300 @@ export function startIntake(): AIResult {
   };
 }
 
+export function startAppointmentIntake(): AIResult {
+  return {
+    intake: { step: 1 },
+    reply: msg({
+      role: 'aoun',
+      textAr: 'سأساعدك في حجز الموعد المناسب. أولاً، ما هو التخصص الطبي الذي تحتاجه؟',
+      textEn: 'I will help you book the appropriate appointment. First, what medical specialty do you need?',
+      options: [
+        { id: 'family', labelAr: 'طب الأسرة', labelEn: 'Family medicine' },
+        { id: 'internal', labelAr: 'الباطنة', labelEn: 'Internal medicine' },
+        { id: 'pediatrics', labelAr: 'طب الأطفال', labelEn: 'Pediatrics' },
+        { id: 'dermatology', labelAr: 'الجلدية', labelEn: 'Dermatology' },
+        { id: 'orthopedics', labelAr: 'العظام', labelEn: 'Orthopedics' },
+        { id: 'other', labelAr: 'تخصص آخر', labelEn: 'Other specialty' },
+      ],
+    }),
+  };
+}
+
+function handleHealthInquiry(n: string): AIResult {
+  const symptoms = extractSymptoms(n);
+  const suggestedSpecialty = suggestSpecialty(symptoms);
+  
+  return {
+    reply: msg({
+      role: 'aoun',
+      textAr: `بناءً على الأعراض التي ذكرتها، قد يكون التخصص المناسب هو ${suggestedSpecialty.ar}. هل تريد أن أساعدك في حجز موعد؟`,
+      textEn: `Based on the symptoms you mentioned, the appropriate specialty might be ${suggestedSpecialty.en}. Would you like me to help you book an appointment?`,
+      disclaimer: true,
+      actions: [
+        { id: 'book', kind: 'intent', intent: 'book_appointment', labelAr: 'نعم، احجز موعد', labelEn: 'Yes, book appointment' },
+        { id: 'info', kind: 'intent', intent: 'general_info', labelAr: 'معلومات عامة فقط', labelEn: 'General information only' },
+      ],
+    }),
+  };
+}
+
+function extractSymptoms(text: string): string[] {
+  const symptoms: string[] = [];
+  if (/(ألم|pain)/.test(text)) symptoms.push('pain');
+  if (/(صداع|headache)/.test(text)) symptoms.push('headache');
+  if (/(حرارة|fever)/.test(text)) symptoms.push('fever');
+  if (/(سعال|cough)/.test(text)) symptoms.push('cough');
+  if (/(دوخة|dizziness)/.test(text)) symptoms.push('dizziness');
+  if (/(تعب|fatigue)/.test(text)) symptoms.push('fatigue');
+  return symptoms;
+}
+
+function suggestSpecialty(symptoms: string[]): { ar: string; en: string } {
+  if (symptoms.includes('headache') || symptoms.includes('dizziness')) {
+    return { ar: 'طب الأسرة أو الباطنة', en: 'Family medicine or Internal medicine' };
+  }
+  if (symptoms.includes('cough') || symptoms.includes('fever')) {
+    return { ar: 'طب الأسرة أو الباطنة', en: 'Family medicine or Internal medicine' };
+  }
+  if (symptoms.includes('pain')) {
+    return { ar: 'طب الأسرة', en: 'Family medicine' };
+  }
+  return { ar: 'طب الأسرة', en: 'Family medicine' };
+}
+
 function continueIntake(n: string, intake: IntakeState, raw: string): AIResult {
+  // Step 1: Ask for specialty
   if (intake.step === 1) {
-    const area = matchOption(n, specialtyOptions) || raw;
+    const specialty = matchSpecialty(n) || raw;
     return {
-      intake: { ...intake, area, step: 2 },
+      intake: { ...intake, area: specialty, step: 2 },
       reply: msg({
         role: 'aoun',
-        textAr: 'شكرًا. منذ متى وهذا الأمر موجود تقريبًا؟',
-        textEn: 'Thank you. About how long has this been going on?',
-        options: durationOptions,
+        textAr: 'ممتاز. متى تفضل الموعد؟ اليوم، غدًا، أم تاريخ محدد؟',
+        textEn: 'Excellent. When would you prefer the appointment? Today, tomorrow, or a specific date?',
+        options: [
+          { id: 'today', labelAr: 'اليوم', labelEn: 'Today' },
+          { id: 'tomorrow', labelAr: 'غدًا', labelEn: 'Tomorrow' },
+          { id: 'week', labelAr: 'هذا الأسبوع', labelEn: 'This week' },
+          { id: 'specific', labelAr: 'تاريخ محدد', labelEn: 'Specific date' },
+        ],
       }),
     };
   }
+  
+  // Step 2: Ask for preferred time
   if (intake.step === 2) {
-    const duration = matchOption(n, durationOptions) || raw;
+    const time = matchTime(n) || raw;
     return {
-      intake: { ...intake, duration, step: 3 },
+      intake: { ...intake, duration: time, step: 3 },
       reply: msg({
         role: 'aoun',
-        textAr: 'هل تصف الأمر بأنه شديد أو مفاجئ، أو تحتاج مراجعة قريبًا، أو استشارة غير مستعجلة؟',
-        textEn: 'Would you describe this as severe/sudden, needed soon, or a non-urgent consultation?',
-        options: urgencyOptions,
+        textAr: 'أي وقت تفضل؟ صباحًا أم مساءً؟',
+        textEn: 'What time do you prefer? Morning or afternoon?',
+        options: [
+          { id: 'morning', labelAr: 'صباحًا', labelEn: 'Morning' },
+          { id: 'afternoon', labelAr: 'مساءً', labelEn: 'Afternoon' },
+          { id: 'evening', labelAr: 'مساءً متأخرًا', labelEn: 'Evening' },
+        ],
       }),
     };
   }
-  const urgency = (['urgent', 'soon', 'routine'].find((k) => n.includes(k)) as Priority | undefined) || inferUrgency(n);
-  if (urgency === 'urgent') {
+  
+  // Step 3: Ask for facility preference
+  if (intake.step === 3) {
+    const facility = matchFacility(n) || raw;
+    return {
+      intake: { ...intake, urgency: facility, step: 4 },
+      reply: msg({
+        role: 'aoun',
+        textAr: 'هل لديك تفضيل للمستشفى أو المركز الصحي؟',
+        textEn: 'Do you have a preference for the hospital or health center?',
+        options: [
+          { id: 'nearest', labelAr: 'الأقرب لي', labelEn: 'Nearest to me' },
+          { id: 'king', labelAr: 'مستشفى الملك عبدالعزيز', labelEn: 'King Abdulaziz Hospital' },
+          { id: 'primary', labelAr: 'مركز الرعاية الأولية', labelEn: 'Primary care center' },
+          { id: 'any', labelAr: 'أي مركز', labelEn: 'Any center' },
+        ],
+      }),
+    };
+  }
+  
+  // Step 4: Suggest appointment and ask for confirmation
+  if (intake.step === 4) {
+    const suggestedAppointment = generateSuggestedAppointment(intake);
+    return {
+      intake: { ...intake, step: 5 },
+      suggestedAppointment,
+      reply: msg({
+        role: 'aoun',
+        textAr: `بناءً على تفضيلاتك، أقترح لك الموعد التالي:\n• التخصص: ${suggestedAppointment.specialtyAr}\n• التاريخ: ${suggestedAppointment.date}\n• الوقت: ${suggestedAppointment.time}\n• المكان: ${suggestedAppointment.facilityAr}\n\nهل تريد تأكيد الحجز؟`,
+        textEn: `Based on your preferences, I suggest the following appointment:\n• Specialty: ${suggestedAppointment.specialtyEn}\n• Date: ${suggestedAppointment.date}\n• Time: ${suggestedAppointment.time}\n• Location: ${suggestedAppointment.facilityEn}\n\nWould you like to confirm the booking?`,
+        suggestedAppointment,
+        actions: [
+          { id: 'confirm', kind: 'confirm_booking', labelAr: 'تأكيد الحجز', labelEn: 'Confirm booking' },
+          { id: 'modify', kind: 'intent', intent: 'book_appointment', labelAr: 'تعديل التفضيلات', labelEn: 'Modify preferences' },
+        ],
+      }),
+    };
+  }
+  
+  // Step 5: Confirm booking
+  if (intake.step === 5) {
+    if (/(نعم|yes|تأكيد|confirm)/.test(n)) {
+      const appointment = generateSuggestedAppointment(intake);
+      return {
+        intake: { step: 0 },
+        suggestedAppointment: appointment,
+        reply: msg({
+          role: 'aoun',
+          textAr: `تم تأكيد حجز موعدك بنجاح!\n• التخصص: ${appointment.specialtyAr}\n• التاريخ: ${appointment.date}\n• الوقت: ${appointment.time}\n• المكان: ${appointment.facilityAr}\n\nيمكنك عرض التفاصيل والتحضيرات من صفحة المواعيد.`,
+          textEn: `Your appointment has been successfully booked!\n• Specialty: ${appointment.specialtyEn}\n• Date: ${appointment.date}\n• Time: ${appointment.time}\n• Location: ${appointment.facilityEn}\n\nYou can view details and preparations from the Appointments page.`,
+          suggestedAppointment: appointment,
+          appointmentIds: [appointment.id],
+          actions: [
+            { id: 'view', kind: 'navigate', href: `/(beneficiary)/appointment/${appointment.id}`, labelAr: 'عرض التفاصيل', labelEn: 'View details' },
+            { id: 'appointments', kind: 'navigate', href: '/(beneficiary)/appointments', labelAr: 'مواعيدي', labelEn: 'My appointments' },
+          ],
+        }),
+      };
+    }
     return {
       intake: { step: 0 },
       reply: msg({
         role: 'aoun',
-        textAr:
-          'إذا كانت الأعراض شديدة أو مفاجئة، لا تعتمد على التطبيق. توجّه للطوارئ أو اتصل بـ 937. بعد أن تكون بأمان يمكنني المساعدة في الإجراءات غير الإسعافية.',
-        textEn:
-          'If symptoms are severe or sudden, do not rely on the app. Go to emergency care or call 937. After you are safe, I can help with non-emergency procedures.',
-        disclaimer: true,
+        textAr: 'تم إلغاء الحجز. يمكنك البدء من جديد إذا أردت.',
+        textEn: 'Booking cancelled. You can start over if you would like.',
+        actions: [
+          { id: 'retry', kind: 'intent', intent: 'book_appointment', labelAr: 'حجز موعد جديد', labelEn: 'Book new appointment' },
+        ],
       }),
     };
   }
-  const area = intake.area || 'غير محدد';
-  const duration = intake.duration || 'غير محدد';
+  
   return {
-    intake: { area, duration, urgency, step: 4 },
-    createRequest: {
-      type: 'specialty_guidance',
-      priority: urgency,
-      originalText: `منطقة: ${area}. المدة: ${duration}. الاستعجال: ${urgency}.`,
-      reasonAr: 'المستفيد لا يعرف التخصص المناسب ويحتاج توجيهًا مهنيًا.',
-      reasonEn: 'The beneficiary does not know the appropriate specialty and needs professional guidance.',
-      providedAr: [`موضع الاهتمام: ${area}`, `المدة التقريبية: ${duration}`, 'المستفيد طلب المساعدة في اختيار الخدمة.'],
-      providedEn: [`Area of concern: ${area}`, `Approximate duration: ${duration}`, 'The beneficiary asked for help choosing a service.'],
-      missingAr: ['فحص سريري وتاريخ طبي كامل — لا يستطيع عون استكماله.'],
-      missingEn: ['Clinical exam and full history — Aoun cannot complete these.'],
-      aiNextStepAr: 'مراجعة مختص لاعتماد التخصص المناسب ثم إتاحة الحجز الإداري.',
-      aiNextStepEn: 'Specialist review to approve an appropriate service, then administrative booking.',
-    },
+    intake: { step: 0 },
     reply: msg({
       role: 'aoun',
-      textAr: `هذا الطلب يحتاج مراجعة مختص لأن اختيار التخصص قرار مهني. نظّمت إجاباتك وأرسلتها للمراجعة:\n• الموضع: ${area}\n• المدة: ${duration}\n• الاستعجال: غير إسعافي\nلن أحجز أو أحدد العيادة قبل اعتماد المختص.`,
-      textEn: `This needs specialist review because choosing a specialty is a professional decision. I organized your answers:\n• Area: ${area}\n• Duration: ${duration}\n• Urgency: non-emergency\nI will not book or assign a clinic before specialist approval.`,
-      disclaimer: true,
+      textAr: 'حدث خطأ. هل تريد البدء من جديد؟',
+      textEn: 'An error occurred. Would you like to start over?',
+      actions: [
+        { id: 'retry', kind: 'intent', intent: 'book_appointment', labelAr: 'حجز موعد جديد', labelEn: 'Book new appointment' },
+      ],
     }),
   };
+}
+
+function matchSpecialty(n: string): string {
+  const specialties: Record<string, string> = {
+    'family': 'طب الأسرة',
+    'internal': 'الباطنة',
+    'pediatrics': 'طب الأطفال',
+    'dermatology': 'الجلدية',
+    'orthopedics': 'العظام',
+  };
+  for (const [key, value] of Object.entries(specialties)) {
+    if (n.includes(key)) return value;
+  }
+  return 'طب الأسرة';
+}
+
+function matchTime(n: string): string {
+  if (/(today|اليوم)/.test(n)) return 'today';
+  if (/(tomorrow|غد)/.test(n)) return 'tomorrow';
+  if (/(week|أسبوع)/.test(n)) return 'week';
+  return 'today';
+}
+
+function matchFacility(n: string): string {
+  if (/(nearest|أقرب)/.test(n)) return 'nearest';
+  if (/(king|ملك)/.test(n)) return 'king';
+  if (/(primary|رعاية)/.test(n)) return 'primary';
+  return 'nearest';
+}
+
+function generateSuggestedAppointment(intake: IntakeState): Appointment {
+  const specialty = intake.area || 'طب الأسرة';
+  const date = generateDate(intake.duration);
+  const time = generateTime(intake.duration);
+  const facility = generateFacility(intake.urgency);
+  
+  return {
+    id: `APT-${Date.now()}`,
+    specialtyAr: specialty,
+    specialtyEn: translateSpecialty(specialty),
+    doctorAr: 'يُحدد عند الحضور',
+    doctorEn: 'Assigned at check-in',
+    facilityAr: facility.nameAr,
+    facilityEn: facility.nameEn,
+    locationAr: facility.locationAr,
+    locationEn: facility.locationEn,
+    date: date,
+    time: time,
+    status: 'upcoming',
+    preparationAr: [
+      'أحضر الهوية وبطاقة التأمين إن وجدت.',
+      'أحضر قائمة أدويتك الحالية.',
+      'وصل قبل الموعد بـ 15 دقيقة لإنهاء الإجراءات.',
+    ],
+    preparationEn: [
+      'Bring your ID and insurance card if you have one.',
+      'Bring a list of your current medications.',
+      'Arrive 15 minutes early for check-in.',
+    ],
+  };
+}
+
+function generateDate(preference: string): string {
+  const today = new Date();
+  if (preference === 'tomorrow') {
+    today.setDate(today.getDate() + 1);
+  } else if (preference === 'week') {
+    today.setDate(today.getDate() + 3);
+  }
+  return today.toISOString().split('T')[0];
+}
+
+function generateTime(preference: string): string {
+  if (preference === 'morning') return '09:00';
+  if (preference === 'afternoon') return '14:00';
+  if (preference === 'evening') return '17:00';
+  return '10:00';
+}
+
+function generateFacility(preference: string): { nameAr: string; nameEn: string; locationAr: string; locationEn: string } {
+  if (preference === 'king') {
+    return {
+      nameAr: 'مستشفى الملك عبدالعزيز',
+      nameEn: 'King Abdulaziz Hospital',
+      locationAr: 'جدة — حي الشرفية',
+      locationEn: 'Jeddah — Al Sharafiyah',
+    };
+  }
+  if (preference === 'primary') {
+    return {
+      nameAr: 'مركز الرعاية الأولية — الروضة',
+      nameEn: 'Primary care center — Al Rawdah',
+      locationAr: 'جدة — حي الروضة',
+      locationEn: 'Jeddah — Al Rawdah',
+    };
+  }
+  return {
+    nameAr: 'مركز الرعاية الأولية — الروضة',
+    nameEn: 'Primary care center — Al Rawdah',
+    locationAr: 'جدة — حي الروضة',
+    locationEn: 'Jeddah — Al Rawdah',
+  };
+}
+
+function translateSpecialty(ar: string): string {
+  const translations: Record<string, string> = {
+    'طب الأسرة': 'Family medicine',
+    'الباطنة': 'Internal medicine',
+    'طب الأطفال': 'Pediatrics',
+    'الجلدية': 'Dermatology',
+    'العظام': 'Orthopedics',
+  };
+  return translations[ar] || 'Family medicine';
 }
 
 function matchOption(n: string, options: ChatOption[]) {
@@ -328,17 +484,6 @@ function inferUrgency(n: string): Priority {
 
 export function optionToUserText(option: ChatOption, locale: Locale) {
   return locale === 'ar' ? option.labelAr : option.labelEn;
-}
-
-export function makeRequestPayload(
-  draft: NonNullable<AIResult['createRequest']>
-): Omit<SpecialistRequest, 'id' | 'createdAt' | 'status'> {
-  return {
-    ...draft,
-    patientId: PATIENT.id,
-    patientNameAr: PATIENT.nameAr,
-    patientNameEn: PATIENT.nameEn,
-  };
 }
 
 export const navActions: ChatAction[] = [];
