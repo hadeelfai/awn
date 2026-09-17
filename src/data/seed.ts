@@ -1,4 +1,4 @@
-import type { Appointment, AppNotification, ExplainedDocument, Facility, Prescription, SpecialistRequest } from '../types';
+import type { AppNotification, Appointment, ExplainedDocument, Facility, Prescription } from '../types';
 
 export const PATIENT = {
   id: 'PAT-1001',
@@ -6,14 +6,6 @@ export const PATIENT = {
   nameEn: 'Hadeel Alharthi',
   cityAr: 'جدة',
   cityEn: 'Jeddah',
-};
-
-export const SPECIALIST = {
-  id: 'SPC-22',
-  nameAr: 'د. نورة العبدالله',
-  nameEn: 'Dr. Noura Alabdullah',
-  roleAr: 'طبيبة أسرة — مراجعة الطلبات',
-  roleEn: 'Family physician — request review',
 };
 
 export const initialAppointments: Appointment[] = [
@@ -181,69 +173,6 @@ export const facilities: Facility[] = [
     x: 0.5,
     y: 0.72,
     availabilityDemo: 'in_stock',
-  },
-];
-
-export const initialRequests: SpecialistRequest[] = [
-  {
-    id: 'REQ-2408',
-    patientId: 'PAT-1001',
-    patientNameAr: 'هديل الحارثي',
-    patientNameEn: 'Hadeel Alharthi',
-    type: 'appointment_change',
-    createdAt: '2026-09-15T08:10:00',
-    status: 'pending',
-    priority: 'soon',
-    originalText: 'أبغى أغيّر موعد الباطنة لأن الوقت غير مناسب.',
-    reasonAr: 'طلب إعادة جدولة موعد قائم.',
-    reasonEn: 'Request to reschedule an existing appointment.',
-    providedAr: ['موعد الباطنة في 16 سبتمبر، مستشفى الملك عبدالعزيز.'],
-    providedEn: ['Internal medicine visit on 16 Sep at King Abdulaziz Hospital.'],
-    missingAr: ['السبب الإداري المفضّل والأيام البديلة.'],
-    missingEn: ['Preferred administrative reason and alternative days.'],
-    aiNextStepAr: 'مراجعة إدارية — يمكن اعتماد التحويل لقائمة المواعيد البديلة.',
-    aiNextStepEn: 'Administrative review — booking alternatives can be offered after approval.',
-  },
-  {
-    id: 'REQ-2391',
-    patientId: 'PAT-0882',
-    patientNameAr: 'مستفيد 0882',
-    patientNameEn: 'Beneficiary 0882',
-    type: 'medical_question',
-    createdAt: '2026-09-14T16:40:00',
-    status: 'more_info',
-    priority: 'routine',
-    originalText: 'هل نتيجة التحليل تعني أن عندي مرض؟',
-    reasonAr: 'المستفيد يطلب حكمًا طبيًا على نتيجة مختبر.',
-    reasonEn: 'Beneficiary asked for a medical judgment on a lab result.',
-    providedAr: ['هموغلوبين 10.2 غ/دل من زيارة سابقة.'],
-    providedEn: ['Hemoglobin 10.2 g/dL from a previous visit.'],
-    missingAr: ['الأعراض الحالية، والتاريخ المرضي، وأدوية قائمة.'],
-    missingEn: ['Current symptoms, medical history, and current medicines.'],
-    extraQuestion: 'هل لديك أعراض مثل الإرهاق أو الدوخة حاليًا؟ ومنذ متى؟',
-    aiNextStepAr: 'لا يُعتمد تشخيص. يلزم تقييم مختص بعد معلومات إضافية.',
-    aiNextStepEn: 'No diagnosis. Specialist review after additional information.',
-  },
-  {
-    id: 'REQ-2370',
-    patientId: 'PAT-0744',
-    patientNameAr: 'مستفيد 0744',
-    patientNameEn: 'Beneficiary 0744',
-    type: 'specialty_guidance',
-    createdAt: '2026-09-13T11:05:00',
-    status: 'approved',
-    priority: 'routine',
-    originalText: 'ما أدري أي عيادة تناسب ألم الركبة المزمن.',
-    reasonAr: 'توجيه إلى التخصص المناسب لألم مفصل مزمن.',
-    reasonEn: 'Guidance to an appropriate specialty for chronic joint pain.',
-    providedAr: ['ألم ركبة لأكثر من شهرين، غير إسعافي.'],
-    providedEn: ['Knee pain for more than two months, non-emergency.'],
-    missingAr: [],
-    missingEn: [],
-    approvedServiceAr: 'عيادة العظام — موعد روتيني',
-    approvedServiceEn: 'Orthopedics clinic — routine appointment',
-    aiNextStepAr: 'اقتراح عيادة العظام بعد مراجعة المختص.',
-    aiNextStepEn: 'Orthopedics suggested pending specialist approval.',
   },
 ];
 

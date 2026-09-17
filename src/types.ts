@@ -1,7 +1,4 @@
 export type Locale = 'ar' | 'en';
-export type Role = 'beneficiary' | 'specialist';
-export type RequestStatus = 'new' | 'pending' | 'approved' | 'more_info' | 'modified';
-export type RequestType = 'specialty_guidance' | 'appointment_change' | 'medical_question' | 'prescription_query';
 export type Priority = 'routine' | 'soon' | 'urgent';
 export type AppointmentStatus = 'upcoming' | 'completed' | 'cancelled' | 'updated';
 export type FacilityType = 'pharmacy' | 'hospital' | 'clinic' | 'center';
@@ -10,8 +7,6 @@ export type NotificationType =
   | 'appointment_update'
   | 'prescription_available'
   | 'prescription_renewal'
-  | 'specialist_response'
-  | 'more_info'
   | 'preparation'
   | 'satisfaction';
 
@@ -66,31 +61,6 @@ export type Facility = {
   availabilityDemo: 'in_stock' | 'limited' | 'unknown';
 };
 
-export type SpecialistRequest = {
-  id: string;
-  patientId: string;
-  patientNameAr: string;
-  patientNameEn: string;
-  type: RequestType;
-  createdAt: string;
-  status: RequestStatus;
-  priority: Priority;
-  originalText: string;
-  reasonAr: string;
-  reasonEn: string;
-  providedAr: string[];
-  providedEn: string[];
-  missingAr: string[];
-  missingEn: string[];
-  aiNextStepAr: string;
-  aiNextStepEn: string;
-  specialistNote?: string;
-  extraQuestion?: string;
-  extraAnswer?: string;
-  approvedServiceAr?: string;
-  approvedServiceEn?: string;
-};
-
 export type AppNotification = {
   id: string;
   type: NotificationType;
@@ -117,7 +87,7 @@ export type ChatAction = {
   id: string;
   labelAr: string;
   labelEn: string;
-  kind: 'navigate' | 'intent' | 'create_request' | 'show_appointments' | 'book';
+  kind: 'navigate' | 'intent' | 'show_appointments' | 'book' | 'confirm_booking' | 'upload_report';
   href?: string;
   intent?: string;
 };
@@ -131,6 +101,8 @@ export type ChatMessage = {
   options?: ChatOption[];
   actions?: ChatAction[];
   appointmentIds?: string[];
+  documentIds?: string[];
+  suggestedAppointment?: Appointment;
   disclaimer?: boolean;
 };
 

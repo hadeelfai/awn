@@ -97,12 +97,6 @@ export default function Home() {
           </AppText>
         </Card>
       ) : null}
-      {notifications.find((n) => n.type === 'more_info' && !n.read) ? (
-        <Card onPress={() => router.push('/(beneficiary)/ask')}>
-          <StatusPill label={tt('moreInfo')} tone="danger" />
-          <AppText style={{ marginTop: 8 }}>{notifications.find((n) => n.type === 'more_info' && !n.read)?.[locale === 'ar' ? 'bodyAr' : 'bodyEn']}</AppText>
-        </Card>
-      ) : null}
 
       <Pressable onPress={() => router.push('/(beneficiary)/profile')} style={{ marginTop: 20 }}>
         <AppText muted>

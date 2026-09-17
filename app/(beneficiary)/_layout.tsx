@@ -16,13 +16,10 @@ export default function BeneficiaryLayout() {
     >
       <Tabs.Screen name="index" options={{ title: tt('home') }} />
       <Tabs.Screen name="ask" options={{ title: tt('askMe') }} />
-      <Tabs.Screen name="guide" options={{ title: tt('guideMe') }} />
+      <Tabs.Screen name="appointments" options={{ title: tt('myAppointments') }} />
       <Tabs.Screen name="explain" options={{ title: tt('explainMe') }} />
-      <Tabs.Screen name="notifications" options={{ href: null }} />
-      <Tabs.Screen name="profile" options={{ href: null }} />
-      <Tabs.Screen name="privacy" options={{ href: null }} />
-      <Tabs.Screen name="feedback" options={{ href: null }} />
-      <Tabs.Screen name="doc" options={{ href: null }} />
+      <Tabs.Screen name="appointment" options={{ href: null }} />
+      <Tabs.Screen name="report" options={{ href: null }} />
     </Tabs>
   );
 }
@@ -33,10 +30,10 @@ function BigTabBar({ state, navigation, descriptors }: any) {
   const icons: Record<string, keyof typeof Ionicons.glyphMap> = {
     index: 'home',
     ask: 'chatbubbles',
-    guide: 'compass',
+    appointments: 'calendar',
     explain: 'document-text',
   };
-  const visible = state.routes.filter((r: any) => ['index', 'ask', 'guide', 'explain'].includes(r.name));
+  const visible = state.routes.filter((r: any) => ['index', 'ask', 'appointments', 'explain'].includes(r.name));
   return (
     <View
       style={{
