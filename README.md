@@ -12,15 +12,6 @@ npm start
 
 Then press `i` for iOS, `a` for Android, or `w` for web.
 
-## Demo path
-
-1. Enter as **Beneficiary**.
-2. Open **Ask Me**, tap the mic, choose: `ما أعرف أي تخصص أحتاج`.
-3. Answer the three questions (non-urgent).
-4. Switch role → **Specialist**, open the new request, **Approve**.
-5. Back to beneficiary: notification → **Choose appointment**.
-6. After booking, open **Medications** and the **map** (availability is labeled demo data).
-
 ## Structure
 
 - `src/services/ai.ts` — intent routing (swap for a real model later)
