@@ -7,7 +7,7 @@ export default function NotFound() {
       <Stack.Screen options={{ title: 'عون', headerShown: false }} />
       <Screen>
         <AppText size={22} weight="700">
-          Aoun
+          Awn
         </AppText>
         <Link href="/">
           <AppText>Home</AppText>

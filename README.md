@@ -1,8 +1,8 @@
-# عون (Aoun)
+# عون (Awn)
 
 Smart healthcare navigation assistant — Expo + React Native prototype for a Ministry of Health AI challenge demo.
 
-Aoun helps beneficiaries ask, get guided, and understand health information in simple language. It does **not** diagnose or replace clinicians. Requests that need medical judgment go to a specialist dashboard for approval.
+Awn helps beneficiaries ask, get guided, and understand health information in simple language. It does **not** diagnose or replace clinicians. Requests that need medical judgment go to a specialist dashboard for approval.
 
 ## Run
 

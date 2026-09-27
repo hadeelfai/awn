@@ -1,36 +1,77 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
-import { AppText, Card, HeroBand, LangSwitch, Screen, SpeakBtn, StatusPill, TopBar, useUi } from '../../src/ui';
+
+import {
+  AppText,
+  Card,
+  HeroBand,
+  LangSwitch,
+  Screen,
+  SpeakBtn,
+  TopBar,
+  useUi,
+} from '../../src/ui';
 
 export default function Home() {
-  const { tt, displayName, palette, row, locale, appointments, prescriptions, notifications, sendUser } = useUi();
-  const next = appointments.find((a) => a.status === 'upcoming' || a.status === 'updated');
-  const refill = prescriptions.find((p) => p.refillSoon);
+  const {
+    tt,
+    displayName,
+    palette,
+    row,
+    locale,
+  } = useUi();
+
+  const isArabic = locale === 'ar';
 
   return (
     <Screen scroll>
+      {/* HEADER */}
       <TopBar
-        title={tt('helloName', { name: displayName.split(' ')[0] })}
+        title={tt('helloName', {
+          name: displayName.split(' ')[0],
+        })}
         subtitle={tt('howHelp')}
         right={<LangSwitch />}
       />
+
+      {/* HERO */}
       <HeroBand>
-        <View style={[row, { justifyContent: 'space-between', alignItems: 'center' }]}>
+        <View
+          style={[
+            row,
+            {
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            },
+          ]}
+        >
           <View style={{ flex: 1 }}>
             <AppText size={15} muted>
               {tt('brand')} — {tt('tagline')}
             </AppText>
-            <AppText size={22} weight="700" style={{ marginTop: 4 }}>
+
+            <AppText
+              size={22}
+              weight="700"
+              style={{ marginTop: 4 }}
+            >
               {tt('composer')}
             </AppText>
           </View>
-          <SpeakBtn text={`${tt('helloName', { name: displayName })} ${tt('howHelp')}`} />
+
+          <SpeakBtn
+            text={`${tt('helloName', {
+              name: displayName,
+            })} ${tt('howHelp')}`}
+          />
         </View>
+
         <Pressable
-          onPress={() => router.push('/(beneficiary)/ask')}
+          onPress={() =>
+            router.push('/(beneficiary)/ask')
+          }
           accessibilityRole="button"
-          accessibilityLabel={tt('askAoun')}
           style={[
             row,
             {
@@ -46,63 +87,434 @@ export default function Home() {
             },
           ]}
         >
-          <Ionicons name="mic-circle" size={34} color={palette.teal} />
+          <Ionicons
+            name="mic-circle"
+            size={34}
+            color={palette.teal}
+          />
+
           <AppText muted style={{ flex: 1 }}>
             {tt('composer')}
           </AppText>
         </Pressable>
       </HeroBand>
 
-      <View style={{ flexDirection: locale === 'ar' ? 'row-reverse' : 'row', flexWrap: 'wrap', gap: 12, marginTop: 18 }}>
-        <Quick title={tt('askMe')} hint={tt('askMeHint')} icon="chatbubbles" onPress={() => router.push('/(beneficiary)/ask')} />
-        <Quick title={tt('myAppointments')} hint={tt('myAppointmentsHint')} icon="calendar" onPress={() => router.push('/(beneficiary)/guide/appointments')} />
-        <Quick title={tt('myMeds')} hint={tt('myMedsHint')} icon="medkit" onPress={() => router.push('/(beneficiary)/guide/medications')} />
-        <Quick title={tt('explainMe')} hint={tt('explainHint')} icon="book" onPress={() => router.push('/(beneficiary)/explain')} />
+      {/* QUICK ACTIONS */}
+      <View
+        style={{
+          flexDirection:
+            locale === 'ar'
+              ? 'row-reverse'
+              : 'row',
+          flexWrap: 'wrap',
+          gap: 12,
+          marginTop: 18,
+        }}
+      >
+        <Quick
+          title={tt('askMe')}
+          hint={tt('askMeHint')}
+          icon="chatbubbles"
+          onPress={() =>
+            router.push('/(beneficiary)/ask')
+          }
+        />
+
+        <Quick
+          title={tt('myAppointments')}
+          hint={tt('myAppointmentsHint')}
+          icon="calendar"
+          onPress={() =>
+            router.push('/(beneficiary)/appointments')
+          }
+        />
+
+        <Quick
+          title={
+            isArabic
+              ? 'أدويتي'
+              : 'My medications'
+          }
+          hint={
+            isArabic
+              ? 'عرض الأدوية والوصفات'
+              : 'View medications and prescriptions'
+          }
+          icon="medkit"
+          onPress={() =>
+            router.push('/(beneficiary)/medications')
+          }
+        />
+
+        <Quick
+          title={tt('explainMe')}
+          hint={tt('explainHint')}
+          icon="document-text"
+          onPress={() =>
+            router.push('/(beneficiary)/explain')
+          }
+        />
       </View>
 
-      <AppText size={20} weight="700" style={{ marginTop: 26, marginBottom: 10 }}>
-        {tt('aounSuggests')}
-      </AppText>
-      {next ? (
-        <Card
-          onPress={() => router.push(`/(beneficiary)/guide/appointment/${next.id}`)}
-          style={{ marginBottom: 12 }}
-        >
-          <StatusPill label={tt('tomorrow')} tone="warning" />
-          <AppText size={18} weight="700" style={{ marginTop: 8 }}>
-            {locale === 'ar' ? next.specialtyAr : next.specialtyEn} · {next.time}
-          </AppText>
-          <AppText muted>{locale === 'ar' ? next.facilityAr : next.facilityEn}</AppText>
-          <AppText style={{ marginTop: 8 }}>{tt('reminderPrep')}</AppText>
-        </Card>
-      ) : null}
-      {refill ? (
-        <Card onPress={() => router.push('/(beneficiary)/guide/medications')} style={{ marginBottom: 12 }}>
-          <StatusPill label={tt('demoBadge')} tone="info" />
-          <AppText size={18} weight="700" style={{ marginTop: 8 }}>
-            {locale === 'ar' ? refill.medicationAr : refill.medicationEn}
-          </AppText>
-          <AppText muted>
-            {locale === 'ar'
-              ? 'اقترب موعد إعادة صرف أحد أدويتك. هل ترغب في معرفة الخيارات المتاحة؟'
-              : 'A refill is coming up. Would you like nearby options?'}
-          </AppText>
-        </Card>
-      ) : null}
-      {appointments.some((a) => a.hasPrescription) ? (
-        <Card onPress={() => router.push('/(beneficiary)/guide/medications')} style={{ marginBottom: 12 }}>
-          <StatusPill label={tt('viewRx')} tone="success" />
-          <AppText size={17} weight="700" style={{ marginTop: 8 }}>
-            {tt('afterVisitRx')}
-          </AppText>
-        </Card>
-      ) : null}
+      {/* AWN SUGGESTS */}
+      <SectionHeader
+        icon="sparkles"
+        title={
+          isArabic
+            ? 'عون يقترح لك'
+            : 'Awn suggests'
+        }
+      />
 
-      <Pressable onPress={() => router.push('/(beneficiary)/profile')} style={{ marginTop: 20 }}>
-        <AppText muted>
-          {tt('settings')} · {tt('privacy')} · {tt('a11y')}
+      {/* NEXT APPOINTMENT */}
+      <View
+        style={{
+          backgroundColor: palette.surface,
+          borderRadius: 24,
+          borderWidth: 1,
+          borderColor: palette.border,
+          overflow: 'hidden',
+        }}
+      >
+        <View style={{ padding: 18 }}>
+          <View
+            style={[
+              row,
+              {
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+              },
+            ]}
+          >
+            <View style={{ flex: 1 }}>
+              <View
+                style={[
+                  row,
+                  {
+                    alignItems: 'center',
+                    gap: 10,
+                  },
+                ]}
+              >
+                <View
+                  style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 14,
+                    backgroundColor: palette.mint,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons
+                    name="calendar"
+                    size={21}
+                    color={palette.tealDark}
+                  />
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <AppText
+                    size={13}
+                    muted
+                    weight="600"
+                  >
+                    {isArabic
+                      ? 'موعدك القادم'
+                      : 'Your next appointment'}
+                  </AppText>
+
+                  <AppText
+                    size={19}
+                    weight="700"
+                    style={{ marginTop: 2 }}
+                  >
+                    {isArabic
+                      ? 'عيادة العظام'
+                      : 'Orthopedics'}
+                  </AppText>
+                </View>
+              </View>
+            </View>
+
+            <View
+              style={{
+                backgroundColor: palette.mint,
+                paddingHorizontal: 11,
+                paddingVertical: 6,
+                borderRadius: 20,
+              }}
+            >
+              <AppText
+                size={12}
+                weight="700"
+                style={{
+                  color: palette.tealDark,
+                }}
+              >
+                {isArabic
+                  ? 'بعد 3 أيام'
+                  : 'In 3 days'}
+              </AppText>
+            </View>
+          </View>
+
+          <View
+            style={{
+              marginTop: 18,
+              gap: 10,
+            }}
+          >
+            <DetailRow
+              icon="time-outline"
+              text={
+                isArabic
+                  ? 'الأحد، 21 سبتمبر · 9:00 ص'
+                  : 'Sunday, Sep 21 · 9:00 AM'
+              }
+            />
+
+            <DetailRow
+              icon="location-outline"
+              text={
+                isArabic
+                  ? 'مركز الرعاية الأولية — الروضة'
+                  : 'Primary care center — Al Rawdah'
+              }
+            />
+          </View>
+        </View>
+
+        {/* APPOINTMENT PREPARATION */}
+        <View
+          style={{
+            backgroundColor: palette.mint,
+            padding: 18,
+          }}
+        >
+          <View
+            style={[
+              row,
+              {
+                alignItems: 'center',
+                gap: 8,
+              },
+            ]}
+          >
+            <Ionicons
+              name="sparkles"
+              size={18}
+              color={palette.tealDark}
+            />
+
+            <AppText
+              size={16}
+              weight="700"
+              style={{
+                color: palette.tealDark,
+              }}
+            >
+              {isArabic
+                ? 'عون يساعدك تستعد'
+                : 'Awn helps you prepare'}
+            </AppText>
+          </View>
+
+          <AppText
+            size={14}
+            style={{
+              marginTop: 8,
+              lineHeight: 22,
+            }}
+          >
+            {isArabic
+              ? 'جهّز تقريرك السابق وقائمة أدويتك، ودوّن أي تغيّرات أو أسئلة تريد مناقشتها مع الطبيب.'
+              : 'Prepare your previous report, medication list, and any changes or questions you want to discuss with your doctor.'}
+          </AppText>
+
+          <Pressable
+            onPress={() =>
+              router.push('/(beneficiary)/ask')
+            }
+            style={{
+              marginTop: 14,
+              backgroundColor: palette.teal,
+              minHeight: 48,
+              borderRadius: 16,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: 16,
+            }}
+          >
+            <View
+              style={[
+                row,
+                {
+                  alignItems: 'center',
+                  gap: 7,
+                },
+              ]}
+            >
+              <Ionicons
+                name="sparkles-outline"
+                size={18}
+                color="#FFFFFF"
+              />
+
+              <AppText
+                weight="700"
+                style={{
+                  color: '#FFFFFF',
+                }}
+              >
+                {isArabic
+                  ? 'ساعدني أستعد'
+                  : 'Help me prepare'}
+              </AppText>
+            </View>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* SMART REMINDERS */}
+      <SectionHeader
+        icon="notifications-outline"
+        title={
+          isArabic
+            ? 'تنبيهات من عون'
+            : 'Awn reminders'
+        }
+      />
+
+      <SmartReminder
+        icon="document-text-outline"
+        title={
+          isArabic
+            ? 'متابعة مقترحة'
+            : 'Follow-up suggested'
+        }
+        description={
+          isArabic
+            ? 'رفعت تقريرًا طبيًا جديدًا، ولم يتم تسجيل موعد متابعة بعد.'
+            : 'You uploaded a new medical report, but no follow-up appointment is recorded.'
+        }
+        action={
+          isArabic
+            ? 'احجز متابعة'
+            : 'Book follow-up'
+        }
+        onPress={() =>
+          router.push('/(beneficiary)/ask')
+        }
+      />
+
+      <SmartReminder
+        icon="medkit-outline"
+        title={
+          isArabic
+            ? 'تذكير بالوصفة'
+            : 'Prescription reminder'
+        }
+        description={
+          isArabic
+            ? 'متبقي 5 أيام على انتهاء وصفة فيتامين D3.'
+            : '5 days remain before your Vitamin D3 prescription ends.'
+        }
+        action={
+          isArabic
+            ? 'عرض التفاصيل'
+            : 'View details'
+        }
+        onPress={() =>
+          router.push('/(beneficiary)/medications')
+        }
+      />
+
+      {/* COMING UP */}
+      <SectionHeader
+        icon="checkmark-circle-outline"
+        title={
+          isArabic
+            ? 'القادم'
+            : 'Coming up'
+        }
+      />
+
+      <Card
+        style={{
+          paddingVertical: 4,
+          marginBottom: 12,
+        }}
+      >
+        <TimelineItem
+          icon="calendar-outline"
+          date={
+            isArabic
+              ? '21 سبتمبر'
+              : 'Sep 21'
+          }
+          title={
+            isArabic
+              ? 'موعد عيادة العظام'
+              : 'Orthopedics appointment'
+          }
+          first
+        />
+
+        <TimelineItem
+          icon="medkit-outline"
+          date={
+            isArabic
+              ? '23 سبتمبر'
+              : 'Sep 23'
+          }
+          title={
+            isArabic
+              ? 'انتهاء وصفة فيتامين D3'
+              : 'Vitamin D3 prescription ends'
+          }
+        />
+
+        <TimelineItem
+          icon="document-text-outline"
+          date={
+            isArabic
+              ? 'متابعة'
+              : 'Follow-up'
+          }
+          title={
+            isArabic
+              ? 'تقرير جديد يحتاج مراجعة'
+              : 'New report needs review'
+          }
+          last
+        />
+      </Card>
+
+      {/* DEMO NOTE */}
+      <View
+        style={[
+          row,
+          {
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: 5,
+            marginTop: 8,
+          },
+        ]}
+      >
+        <Ionicons
+          name="information-circle-outline"
+          size={14}
+          color={palette.teal}
+        />
+
+        <AppText muted size={11}>
+          {isArabic
+            ? 'بيانات تجريبية لعرض رؤية عون المستقبلية'
+            : 'Demo data showing Awn’s future vision'}
         </AppText>
-      </Pressable>
+      </View>
     </Screen>
   );
 }
@@ -119,11 +531,11 @@ function Quick({
   onPress: () => void;
 }) {
   const { palette } = useUi();
+
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={title}
       style={{
         width: '47%',
         flexGrow: 1,
@@ -136,15 +548,309 @@ function Quick({
         minHeight: 128,
       }}
     >
-      <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: palette.mint, alignItems: 'center', justifyContent: 'center' }}>
-        <Ionicons name={icon} size={22} color={palette.tealDark} />
+      <View
+        style={{
+          width: 42,
+          height: 42,
+          borderRadius: 14,
+          backgroundColor: palette.mint,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Ionicons
+          name={icon}
+          size={22}
+          color={palette.tealDark}
+        />
       </View>
-      <AppText size={18} weight="700" style={{ marginTop: 12 }}>
+
+      <AppText
+        size={18}
+        weight="700"
+        style={{ marginTop: 12 }}
+      >
         {title}
       </AppText>
+
       <AppText muted size={13}>
         {hint}
       </AppText>
     </Pressable>
+  );
+}
+
+function SectionHeader({
+  icon,
+  title,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+}) {
+  const { palette, row } = useUi();
+
+  return (
+    <View
+      style={[
+        row,
+        {
+          alignItems: 'center',
+          gap: 7,
+          marginTop: 28,
+          marginBottom: 11,
+        },
+      ]}
+    >
+      <Ionicons
+        name={icon}
+        size={20}
+        color={palette.teal}
+      />
+
+      <AppText size={20} weight="700">
+        {title}
+      </AppText>
+    </View>
+  );
+}
+
+function DetailRow({
+  icon,
+  text,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  text: string;
+}) {
+  const { palette, row } = useUi();
+
+  return (
+    <View
+      style={[
+        row,
+        {
+          alignItems: 'center',
+          gap: 8,
+        },
+      ]}
+    >
+      <Ionicons
+        name={icon}
+        size={17}
+        color={palette.teal}
+      />
+
+      <AppText muted size={14}>
+        {text}
+      </AppText>
+    </View>
+  );
+}
+
+function SmartReminder({
+  icon,
+  title,
+  description,
+  action,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  description: string;
+  action: string;
+  onPress: () => void;
+}) {
+  const { palette, row, locale } = useUi();
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={{
+        backgroundColor: palette.surface,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: palette.border,
+        padding: 16,
+        marginBottom: 10,
+      }}
+    >
+      <View
+        style={[
+          row,
+          {
+            alignItems: 'flex-start',
+            gap: 12,
+          },
+        ]}
+      >
+        <View
+          style={{
+            width: 42,
+            height: 42,
+            borderRadius: 14,
+            backgroundColor: palette.mint,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Ionicons
+            name={icon}
+            size={21}
+            color={palette.tealDark}
+          />
+        </View>
+
+        <View style={{ flex: 1 }}>
+          <AppText
+            size={16}
+            weight="700"
+          >
+            {title}
+          </AppText>
+
+          <AppText
+            muted
+            size={13}
+            style={{
+              marginTop: 4,
+              lineHeight: 20,
+            }}
+          >
+            {description}
+          </AppText>
+
+          <View
+            style={[
+              row,
+              {
+                alignItems: 'center',
+                gap: 4,
+                marginTop: 9,
+              },
+            ]}
+          >
+            <AppText
+              size={13}
+              weight="700"
+              style={{
+                color: palette.tealDark,
+              }}
+            >
+              {action}
+            </AppText>
+
+            <Ionicons
+              name={
+                locale === 'ar'
+                  ? 'arrow-back'
+                  : 'arrow-forward'
+              }
+              size={14}
+              color={palette.tealDark}
+            />
+          </View>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+function TimelineItem({
+  icon,
+  date,
+  title,
+  first = false,
+  last = false,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  date: string;
+  title: string;
+  first?: boolean;
+  last?: boolean;
+}) {
+  const { palette, row } = useUi();
+
+  return (
+    <View
+      style={[
+        row,
+        {
+          minHeight: 72,
+          alignItems: 'stretch',
+        },
+      ]}
+    >
+      <View
+        style={{
+          width: 42,
+          alignItems: 'center',
+        }}
+      >
+        {!first && (
+          <View
+            style={{
+              width: 2,
+              height: 14,
+              backgroundColor: palette.border,
+            }}
+          />
+        )}
+
+        <View
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 15,
+            backgroundColor: palette.mint,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Ionicons
+            name={icon}
+            size={15}
+            color={palette.tealDark}
+          />
+        </View>
+
+        {!last && (
+          <View
+            style={{
+              width: 2,
+              flex: 1,
+              backgroundColor: palette.border,
+            }}
+          />
+        )}
+      </View>
+
+      <View
+        style={{
+          flex: 1,
+          paddingTop: first ? 5 : 17,
+          paddingBottom: 12,
+        }}
+      >
+        <AppText
+          size={12}
+          weight="700"
+          style={{
+            color: palette.tealDark,
+          }}
+        >
+          {date}
+        </AppText>
+
+        <AppText
+          size={15}
+          weight="600"
+          style={{
+            marginTop: 3,
+          }}
+        >
+          {title}
+        </AppText>
+      </View>
+    </View>
   );
 }

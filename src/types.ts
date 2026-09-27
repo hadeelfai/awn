@@ -94,7 +94,7 @@ export type ChatAction = {
 
 export type ChatMessage = {
   id: string;
-  role: 'user' | 'aoun' | 'system';
+  role: 'user' | 'awn' | 'system';
   textAr: string;
   textEn: string;
   createdAt: string;

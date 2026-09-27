@@ -58,9 +58,9 @@ export type AIResult = {
 
 export function greeting(locale: Locale): ChatMessage {
   return msg({
-    role: 'aoun',
+    role: 'awn',
     textAr: 'مرحبًا، أنا عون. أقدر أساعدك في الاستفسارات الصحية العامة، حجز المواعيد، وشرح التقارير الطبية بلغة بسيطة. لا أشخص الأمراض ولا أصف العلاج.',
-    textEn: 'Hello, I am Aoun. I can help with general health inquiries, booking appointments, and explaining medical reports in simple language. I do not diagnose or prescribe treatment.',
+    textEn: 'Hello, I am Awn. I can help with general health inquiries, booking appointments, and explaining medical reports in simple language. I do not diagnose or prescribe treatment.',
     actions: [
       { id: 'a1', kind: 'intent', intent: 'book_appointment', labelAr: 'أريد حجز موعد', labelEn: 'I want to book an appointment' },
       { id: 'a2', kind: 'navigate', href: '/(beneficiary)/explain', labelAr: 'شرح تقرير طبي', labelEn: 'Explain a medical report' },
@@ -85,7 +85,7 @@ export function respond(input: string, intake: IntakeState, appointments: Appoin
   if (/(شرح تقرير|تحليل|نتيجة|explain report|lab result|upload report|رفع تقرير)/.test(n)) {
     return {
       reply: msg({
-        role: 'aoun',
+        role: 'awn',
         textAr: 'يمكنك رفع تقريرك الطبي وسأشرحه لك بلغة بسيطة. اضغط على زر الرفع أدناه.',
         textEn: 'You can upload your medical report and I will explain it in simple language. Click the upload button below.',
         actions: [
@@ -105,7 +105,7 @@ export function respond(input: string, intake: IntakeState, appointments: Appoin
     return {
       showAppointments: true,
       reply: msg({
-        role: 'aoun',
+        role: 'awn',
         textAr: 'إليك مواعيدك الحالية:',
         textEn: 'Here are your current appointments:',
         appointmentIds: appointments.map((a) => a.id),
@@ -119,7 +119,7 @@ export function respond(input: string, intake: IntakeState, appointments: Appoin
     const next = appointments.find((a) => a.status === 'upcoming' || a.status === 'updated');
     return {
       reply: msg({
-        role: 'aoun',
+        role: 'awn',
         textAr: next
           ? `إليك التحضيرات لموعدك في ${next.facilityAr} يوم ${next.date} الساعة ${next.time}.`
           : 'ليس لديك موعد قادم حاليًا.',
@@ -138,7 +138,7 @@ export function respond(input: string, intake: IntakeState, appointments: Appoin
   if (n.length < 4) {
     return {
       reply: msg({
-        role: 'aoun',
+        role: 'awn',
         textAr: 'أقدر أساعدك في الاستفسارات الصحية وحجز المواعيد وشرح التقارير. كيف يمكنني مساعدتك؟',
         textEn: 'I can help with health inquiries, booking appointments, and explaining reports. How can I help you?',
         options: [
@@ -152,7 +152,7 @@ export function respond(input: string, intake: IntakeState, appointments: Appoin
 
   return {
     reply: msg({
-      role: 'aoun',
+      role: 'awn',
       textAr: 'أقدر مساعدتك في هذا الاستفسار. هل تريد حجز موعد لهذه المشكلة، أم تحتاج معلومات عامة؟',
       textEn: 'I can help you with this inquiry. Would you like to book an appointment for this issue, or do you need general information?',
       options: [
@@ -167,7 +167,7 @@ export function startIntake(): AIResult {
   return {
     intake: { step: 1 },
     reply: msg({
-      role: 'aoun',
+      role: 'awn',
       textAr: 'أكيد، خلينا نحدد احتياجك بأسئلة قصيرة. أين موضع الإزعاج أو الاستفسار؟ هذه الأسئلة لتنظيم الطلب وليست تشخيصًا.',
       textEn: 'Sure — a few short questions to understand your need. Where is the concern? This is to organize the request, not to diagnose.',
       options: specialtyOptions,
@@ -179,7 +179,7 @@ export function startAppointmentIntake(): AIResult {
   return {
     intake: { step: 1 },
     reply: msg({
-      role: 'aoun',
+      role: 'awn',
       textAr: 'سأساعدك في حجز الموعد المناسب. أولاً، ما هو التخصص الطبي الذي تحتاجه؟',
       textEn: 'I will help you book the appropriate appointment. First, what medical specialty do you need?',
       options: [
@@ -200,7 +200,7 @@ function handleHealthInquiry(n: string): AIResult {
   
   return {
     reply: msg({
-      role: 'aoun',
+      role: 'awn',
       textAr: `بناءً على الأعراض التي ذكرتها، قد يكون التخصص المناسب هو ${suggestedSpecialty.ar}. هل تريد أن أساعدك في حجز موعد؟`,
       textEn: `Based on the symptoms you mentioned, the appropriate specialty might be ${suggestedSpecialty.en}. Would you like me to help you book an appointment?`,
       disclaimer: true,
@@ -243,7 +243,7 @@ function continueIntake(n: string, intake: IntakeState, raw: string): AIResult {
     return {
       intake: { ...intake, area: specialty, step: 2 },
       reply: msg({
-        role: 'aoun',
+        role: 'awn',
         textAr: 'ممتاز. متى تفضل الموعد؟ اليوم، غدًا، أم تاريخ محدد؟',
         textEn: 'Excellent. When would you prefer the appointment? Today, tomorrow, or a specific date?',
         options: [
@@ -262,7 +262,7 @@ function continueIntake(n: string, intake: IntakeState, raw: string): AIResult {
     return {
       intake: { ...intake, duration: time, step: 3 },
       reply: msg({
-        role: 'aoun',
+        role: 'awn',
         textAr: 'أي وقت تفضل؟ صباحًا أم مساءً؟',
         textEn: 'What time do you prefer? Morning or afternoon?',
         options: [
@@ -280,7 +280,7 @@ function continueIntake(n: string, intake: IntakeState, raw: string): AIResult {
     return {
       intake: { ...intake, urgency: facility, step: 4 },
       reply: msg({
-        role: 'aoun',
+        role: 'awn',
         textAr: 'هل لديك تفضيل للمستشفى أو المركز الصحي؟',
         textEn: 'Do you have a preference for the hospital or health center?',
         options: [
@@ -300,7 +300,7 @@ function continueIntake(n: string, intake: IntakeState, raw: string): AIResult {
       intake: { ...intake, step: 5 },
       suggestedAppointment,
       reply: msg({
-        role: 'aoun',
+        role: 'awn',
         textAr: `بناءً على تفضيلاتك، أقترح لك الموعد التالي:\n• التخصص: ${suggestedAppointment.specialtyAr}\n• التاريخ: ${suggestedAppointment.date}\n• الوقت: ${suggestedAppointment.time}\n• المكان: ${suggestedAppointment.facilityAr}\n\nهل تريد تأكيد الحجز؟`,
         textEn: `Based on your preferences, I suggest the following appointment:\n• Specialty: ${suggestedAppointment.specialtyEn}\n• Date: ${suggestedAppointment.date}\n• Time: ${suggestedAppointment.time}\n• Location: ${suggestedAppointment.facilityEn}\n\nWould you like to confirm the booking?`,
         suggestedAppointment,
@@ -320,7 +320,7 @@ function continueIntake(n: string, intake: IntakeState, raw: string): AIResult {
         intake: { step: 0 },
         suggestedAppointment: appointment,
         reply: msg({
-          role: 'aoun',
+          role: 'awn',
           textAr: `تم تأكيد حجز موعدك بنجاح!\n• التخصص: ${appointment.specialtyAr}\n• التاريخ: ${appointment.date}\n• الوقت: ${appointment.time}\n• المكان: ${appointment.facilityAr}\n\nيمكنك عرض التفاصيل والتحضيرات من صفحة المواعيد.`,
           textEn: `Your appointment has been successfully booked!\n• Specialty: ${appointment.specialtyEn}\n• Date: ${appointment.date}\n• Time: ${appointment.time}\n• Location: ${appointment.facilityEn}\n\nYou can view details and preparations from the Appointments page.`,
           suggestedAppointment: appointment,
@@ -335,7 +335,7 @@ function continueIntake(n: string, intake: IntakeState, raw: string): AIResult {
     return {
       intake: { step: 0 },
       reply: msg({
-        role: 'aoun',
+        role: 'awn',
         textAr: 'تم إلغاء الحجز. يمكنك البدء من جديد إذا أردت.',
         textEn: 'Booking cancelled. You can start over if you would like.',
         actions: [
@@ -348,7 +348,7 @@ function continueIntake(n: string, intake: IntakeState, raw: string): AIResult {
   return {
     intake: { step: 0 },
     reply: msg({
-      role: 'aoun',
+      role: 'awn',
       textAr: 'حدث خطأ. هل تريد البدء من جديد؟',
       textEn: 'An error occurred. Would you like to start over?',
       actions: [
