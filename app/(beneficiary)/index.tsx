@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
+import { Image } from 'expo-image';
 
 import {
   AppText,
@@ -9,7 +10,6 @@ import {
   LangSwitch,
   Screen,
   SpeakBtn,
-  TopBar,
   useUi,
 } from '../../src/ui';
 
@@ -27,13 +27,92 @@ export default function Home() {
   return (
     <Screen scroll>
       {/* HEADER */}
-      <TopBar
-        title={tt('helloName', {
-          name: displayName.split(' ')[0],
-        })}
-        subtitle={tt('howHelp')}
-        right={<LangSwitch />}
-      />
+      <View
+        style={{
+          minHeight: 92,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 16,
+          position: 'relative',
+        }}
+      >
+        <View style={{ zIndex: 1 }}>
+          <LangSwitch />
+        </View>
+
+        <Image
+          source={require('../../assets/brand/logo.png')}
+          style={{
+            width: 111,
+            height: 111,
+            position: 'absolute',
+            left: '50%',
+            transform: [{ translateX: -42 }],
+          }}
+          contentFit="contain"
+          accessibilityLabel={tt('brand')}
+        />
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, zIndex: 1 }}>
+          <Pressable
+            onPress={() => router.push('/(beneficiary)/notifications')}
+            accessibilityRole="button"
+            accessibilityLabel={tt('notifications')}
+            hitSlop={8}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: palette.surface,
+              borderWidth: 1,
+              borderColor: palette.border,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons
+              name="notifications-outline"
+              size={19}
+              color={palette.ink}
+            />
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push('/(beneficiary)/settings')}
+            accessibilityRole="button"
+            accessibilityLabel={tt('settings')}
+            hitSlop={8}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: palette.surface,
+              borderWidth: 1,
+              borderColor: palette.border,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons
+              name="settings-outline"
+              size={19}
+              color={palette.ink}
+            />
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={{ marginBottom: 20 }}>
+        <AppText size={27} weight="700">
+          {tt('helloName', {
+            name: displayName.split(' ')[0],
+          })}
+        </AppText>
+        <AppText muted size={17} style={{ marginTop: 4 }}>
+          {tt('brand')} — {tt('tagline')}
+        </AppText>
+      </View>
 
       {/* HERO */}
       <HeroBand>
@@ -48,7 +127,7 @@ export default function Home() {
         >
           <View style={{ flex: 1 }}>
             <AppText size={15} muted>
-              {tt('brand')} — {tt('tagline')}
+              {tt('howHelp')}
             </AppText>
 
             <AppText
@@ -111,6 +190,8 @@ export default function Home() {
           marginTop: 18,
         }}
       >
+
+      {/*
         <Quick
           title={tt('askMe')}
           hint={tt('askMeHint')}
@@ -119,7 +200,10 @@ export default function Home() {
             router.push('/(beneficiary)/ask')
           }
         />
+*/ }
 
+
+{/**
         <Quick
           title={tt('myAppointments')}
           hint={tt('myAppointmentsHint')}
@@ -128,6 +212,7 @@ export default function Home() {
             router.push('/(beneficiary)/appointments')
           }
         />
+ */}
 
         <Quick
           title={
@@ -154,6 +239,8 @@ export default function Home() {
             router.push('/(beneficiary)/explain')
           }
         />
+
+
       </View>
 
       {/* AWN SUGGESTS */}

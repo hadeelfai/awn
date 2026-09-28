@@ -221,7 +221,7 @@ export function TopBar({
 export function LangSwitch() {
   const { locale, setLocale, palette, row } = useUi();
   return (
-    <View style={[row, { backgroundColor: palette.mint, borderRadius: radius.pill, padding: 4 }]}>
+    <View style={[row, { backgroundColor: palette.mint, borderRadius: radius.pill, padding: 2 }]}>
       {(['ar', 'en'] as const).map((l) => (
         <Pressable
           key={l}
@@ -229,11 +229,11 @@ export function LangSwitch() {
           accessibilityRole="button"
           accessibilityState={{ selected: locale === l }}
           style={{
-            paddingHorizontal: 14,
-            paddingVertical: 8,
+            paddingHorizontal: 7,
+            paddingVertical: 7,
             borderRadius: radius.pill,
             backgroundColor: locale === l ? palette.tealDark : 'transparent',
-            minWidth: 72,
+            minWidth: 44,
             alignItems: 'center',
           }}
         >

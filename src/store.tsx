@@ -3,6 +3,7 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from 'react';
@@ -22,6 +23,13 @@ import {
 } from './services/ai';
 
 import { API_URL } from './config';
+import {
+  getSupabaseAccessToken,
+  loadSyncedData,
+  saveAppointment,
+  saveChatMessage,
+  saveReport,
+} from './services/supabaseData';
 import { colors, highContrastColors } from './theme';
 
 import type {
@@ -56,6 +64,18 @@ type State = {
 const AppContext =
   createContext<ReturnType<typeof useAppValue> | null>(null);
 
+
+function mergeById<T extends { id: string }>(
+  current: T[],
+  persisted: T[]
+): T[] {
+  const persistedIds = new Set(persisted.map((item) => item.id));
+  return [
+    ...persisted,
+    ...current.filter((item) => !persistedIds.has(item.id)),
+  ];
+}
+
 function useAppValue() {
   const [locale, setLocaleState] =
     useState<Locale>('ar');
@@ -82,6 +102,15 @@ function useAppValue() {
 
   const [appointments, setAppointments] =
     useState(initialAppointments);
+
+  const mergeAppointments = useCallback(
+    (incoming: Appointment[]) => {
+      setAppointments((current) =>
+        mergeById(current, incoming)
+      );
+    },
+    []
+  );
 
   const [prescriptions, setPrescriptions] =
     useState(initialPrescriptions);
@@ -138,6 +167,30 @@ function useAppValue() {
     useState<string[]>([
       'APT-219',
     ]);
+
+  useEffect(() => {
+    let active = true;
+
+    void loadSyncedData()
+      .then((data) => {
+        if (!active) return;
+
+        setAppointments((current) => mergeById(current, data.appointments));
+        setDocuments((current) => mergeById(current, data.reports));
+
+        if (data.messages.length) {
+          setMessages(data.messages);
+        }
+      })
+      .catch((error) => {
+        console.warn('Supabase sync unavailable:', error);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
 
   const [
     pendingFeedback,
@@ -224,6 +277,9 @@ function useAppValue() {
             ...prev,
           ]
         );
+        void saveAppointment(suggestedAppointment).catch((error) =>
+          console.warn('Could not save appointment:', error)
+        );
 
         pushNotification({
           type: 'appointment_update',
@@ -254,6 +310,9 @@ function useAppValue() {
             createdDocument,
             ...prev,
           ]
+        );
+        void saveReport(createdDocument).catch((error) =>
+          console.warn('Could not save report:', error)
         );
 
         pushNotification({
@@ -299,6 +358,9 @@ function useAppValue() {
           userMsg,
         ]
       );
+      void saveChatMessage(userMsg).catch((error) =>
+        console.warn('Could not save chat message:', error)
+      );
 
       try {
         const response =
@@ -310,6 +372,7 @@ function useAppValue() {
               headers: {
                 'Content-Type':
                   'application/json',
+                Authorization: 'Bearer ' + await getSupabaseAccessToken(),
               },
 
               body: JSON.stringify({
@@ -346,6 +409,9 @@ function useAppValue() {
             awnMsg,
           ]
         );
+        void saveChatMessage(awnMsg).catch((error) =>
+          console.warn('Could not save chat reply:', error)
+        );
       } catch (error) {
         /*
          * Don't use console.error here.
@@ -377,6 +443,9 @@ function useAppValue() {
             ...prev,
             errorMsg,
           ]
+        );
+        void saveChatMessage(errorMsg).catch((saveError) =>
+          console.warn('Could not save chat error:', saveError)
         );
       }
     },
@@ -491,6 +560,9 @@ function useAppValue() {
             ...prev,
           ]
         );
+        void saveAppointment(apt).catch((error) =>
+          console.warn('Could not save appointment:', error)
+        );
 
         setPendingFeedback(
           'booking'
@@ -511,6 +583,9 @@ function useAppValue() {
             doc,
             ...prev,
           ]
+        );
+        void saveReport(doc).catch((error) =>
+          console.warn('Could not save report:', error)
         );
 
         setPendingFeedback(
@@ -607,6 +682,7 @@ function useAppValue() {
     speak,
 
     appointments,
+    mergeAppointments,
     prescriptions,
     notifications,
     messages,

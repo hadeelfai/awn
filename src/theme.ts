@@ -1,27 +1,45 @@
 export const colors = {
-  bg: '#F3F7F4',
-  bgMint: '#E7F3EE',
+
+  // Backgrounds
+  bg: '#f8f8f8',
+  bgMint: '#E6F4F5',
+
   surface: '#FFFFFF',
-  surfaceMuted: '#F7FBFA',
-  ink: '#14332C',
-  inkMuted: '#4E6A62',
-  inkSoft: '#7A938C',
-  teal: '#128C82',
-  tealDeep: '#0F6E66',
-  tealDark: '#164A43',
-  tealBright: '#1AA3A0',
-  mint: '#D8EFEA',
-  mintStrong: '#C4E6DE',
-  border: '#D7E5E0',
+  surfaceMuted: '#F7FBFC',
+
+  // Text
+  ink: '#12343B',
+  inkMuted: '#4E6870',
+  inkSoft: '#7A9299',
+
+  // Primary — Blue/Turquoise
+  teal: '#159A9C',
+  tealDeep: '#087F86',
+  tealDark: '#15505A',
+  tealBright: '#20B8BA',
+
+  // Secondary / soft turquoise
+  mint: '#D7EFF0',
+  mintStrong: '#BFE4E6',
+
+  // Borders
+  border: '#D5E6E9',
+
+  // Status
   danger: '#B42318',
   dangerSoft: '#FDECEC',
+
   warning: '#B54708',
   warningSoft: '#FEF4E6',
-  success: '#067647',
-  successSoft: '#E7F8EF',
-  info: '#175CD3',
-  infoSoft: '#E8F1FF',
-  overlay: 'rgba(10, 28, 24, 0.45)',
+
+  success: '#087A68',
+  successSoft: '#E5F7F3',
+
+  info: '#1769AA',
+  infoSoft: '#E7F2FC',
+
+  overlay: 'rgba(10, 38, 45, 0.45)',
+
   mapLand: '#D9EBE4',
   mapRoad: '#F7FFFC',
   mapWater: '#C5DDE8',

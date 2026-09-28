@@ -11,6 +11,7 @@ import {
     askAwn,
     getBookedAppointments,
     getSavedReports,
+    type Appointment as AgentAppointment,
 } from "./agent.js";
 
 
@@ -94,6 +95,89 @@ app.get("/health", (_req, res) => {
 });
 
 
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_PUBLISHABLE_KEY =
+  process.env.SUPABASE_PUBLISHABLE_KEY;
+
+function getBearerToken(req: express.Request) {
+  const authorization = req.header("authorization") ?? "";
+  return authorization.match(/^Bearer\s+(.+)$/i)?.[1];
+}
+
+function getSupabaseHeaders(accessToken: string) {
+  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+    throw new Error("Supabase server configuration is missing.");
+  }
+
+  return {
+    apikey: SUPABASE_PUBLISHABLE_KEY,
+    authorization: "Bearer " + accessToken,
+    "content-type": "application/json",
+  };
+}
+
+async function verifySupabaseUser(accessToken: string) {
+  const response = await fetch(SUPABASE_URL + "/auth/v1/user", {
+    headers: getSupabaseHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error("The Supabase session is invalid or expired.");
+  }
+
+  const user = (await response.json()) as { id?: string };
+  if (!user.id) throw new Error("Supabase did not return a user id.");
+  return user.id;
+}
+
+function toAppAppointment(appointment: AgentAppointment) {
+  return {
+    id: appointment.id,
+    specialtyAr: appointment.specialtyAr,
+    specialtyEn: appointment.specialty,
+    doctorAr: "",
+    doctorEn: "",
+    facilityAr: appointment.facilityAr,
+    facilityEn: appointment.facility,
+    locationAr: appointment.cityAr + "، " + appointment.neighborhoodAr,
+    locationEn: appointment.city + ", " + appointment.neighborhood,
+    date: appointment.date,
+    time: appointment.time,
+    status: "upcoming",
+    preparationAr: [],
+    preparationEn: [],
+  };
+}
+
+async function saveBookedAppointment(
+  accessToken: string,
+  appointment: AgentAppointment
+) {
+  await verifySupabaseUser(accessToken);
+
+  const response = await fetch(
+    SUPABASE_URL + "/rest/v1/awn_appointments?on_conflict=user_id%2Cclient_id",
+    {
+      method: "POST",
+      headers: {
+        ...getSupabaseHeaders(accessToken),
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      },
+      body: JSON.stringify({
+        client_id: appointment.id,
+        payload: toAppAppointment(appointment),
+        created_at: new Date().toISOString(),
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      "Could not save appointment to Supabase (HTTP " + response.status + ")."
+    );
+  }
+}
+
 // ============================================================
 // CHAT
 // ============================================================
@@ -113,11 +197,32 @@ app.post("/chat", async (req, res) => {
       });
     }
 
-    const response = await askAwn(message.trim());
+    const accessToken = getBearerToken(req);
+    if (!accessToken) {
+      return res.status(401).json({
+        success: false,
+        message: "A Supabase session is required.",
+      });
+    }
+
+    await verifySupabaseUser(accessToken);
+    const previouslyBooked = new Set(
+      getBookedAppointments().map((appointment) => appointment.id)
+    );
+
+    const reply = await askAwn(message.trim());
+    const newBookings = getBookedAppointments().filter(
+      (appointment) => !previouslyBooked.has(appointment.id)
+    );
+
+    for (const appointment of newBookings) {
+      await saveBookedAppointment(accessToken, appointment);
+    }
 
     return res.json({
       success: true,
-      reply: response,
+      reply,
+      appointments: newBookings.map(toAppAppointment),
     });
   } catch (error) {
     console.error("Chat error:", error);
@@ -134,11 +239,44 @@ app.post("/chat", async (req, res) => {
 // BOOKED APPOINTMENTS
 // ============================================================
 
-app.get("/appointments/booked", (_req, res) => {
-  return res.json({
-    success: true,
-    appointments: getBookedAppointments(),
-  });
+app.get("/appointments/booked", async (req, res) => {
+  try {
+    const accessToken = getBearerToken(req);
+    if (!accessToken) {
+      return res.status(401).json({
+        success: false,
+        message: "A Supabase session is required.",
+      });
+    }
+
+    await verifySupabaseUser(accessToken);
+    const response = await fetch(
+      SUPABASE_URL + "/rest/v1/awn_appointments?select=payload&order=created_at.desc&limit=200",
+      { headers: getSupabaseHeaders(accessToken) }
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        "Could not load appointments from Supabase (HTTP " + response.status + ")."
+      );
+    }
+
+    const rows = (await response.json()) as Array<{
+      payload: ReturnType<typeof toAppAppointment>;
+    }>;
+
+    return res.json({
+      success: true,
+      appointments: rows.map((row) => row.payload),
+    });
+  } catch (error) {
+    console.error("Appointment load error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Could not load appointments.",
+    });
+  }
 });
 
 

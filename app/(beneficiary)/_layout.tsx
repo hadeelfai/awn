@@ -20,6 +20,8 @@ export default function BeneficiaryLayout() {
       <Tabs.Screen name="explain" options={{ title: tt('explainMe') }} />
       <Tabs.Screen name="appointment/[id]" options={{ href: null }} />
       <Tabs.Screen name="report/[id]" options={{ href: null }} />
+      <Tabs.Screen name="settings" options={{ href: null }} />
+      <Tabs.Screen name="notifications" options={{ href: null }} />
     </Tabs>
   );
 }

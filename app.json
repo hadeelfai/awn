@@ -36,7 +36,8 @@
       ],
       "expo-image",
       "expo-image-picker",
-      "expo-document-picker"
+      "expo-document-picker",
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true

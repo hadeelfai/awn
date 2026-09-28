@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { Modal, Pressable, ScrollView, View } from 'react-native';
 
 import { API_URL } from '../../src/config';
+import { getSupabaseAccessToken } from '../../src/services/supabaseData';
 import {
   AppText,
   Card,
@@ -137,6 +138,7 @@ export default function Appointments() {
     tt,
     locale,
     appointments: localAppointments,
+    mergeAppointments,
     palette,
     row,
     sendUser,
@@ -170,8 +172,14 @@ export default function Appointments() {
 
   const loadAppointments = useCallback(async () => {
     try {
+      const accessToken = await getSupabaseAccessToken();
       const response = await fetch(
-        `${API_URL}/appointments/booked`
+        API_URL + '/appointments/booked',
+        {
+          headers: {
+            Authorization: 'Bearer ' + accessToken,
+          },
+        }
       );
 
       if (!response.ok) {
@@ -182,9 +190,9 @@ export default function Appointments() {
 
       const data = await response.json();
 
-      setBackendAppointments(
-        data.appointments ?? []
-      );
+      const savedAppointments = data.appointments ?? [];
+      setBackendAppointments(savedAppointments);
+      mergeAppointments(savedAppointments);
     } catch (error) {
       // console.log instead of console.error so Expo
       // does not show a large development warning.
@@ -193,7 +201,7 @@ export default function Appointments() {
         error
       );
     }
-  }, []);
+  }, [mergeAppointments]);
 
   // Reload every time the user opens مواعيدي
   useFocusEffect(
@@ -213,8 +221,11 @@ export default function Appointments() {
    * existing manual booking UI.
    */
   const appointments = [
-    ...backendAppointments,
-    ...localAppointments,
+    ...new Map(
+      [...backendAppointments, ...localAppointments].map(
+        (appointment) => [appointment.id, appointment]
+      )
+    ).values(),
   ];
 
   const upcoming = appointments.filter(
