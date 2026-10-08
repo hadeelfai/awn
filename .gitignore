@@ -31,7 +31,12 @@ yarn-error.*
 *.pem
 
 # local env files
+/.env
 .env*.local
+/awn-rag/.env
+/awn-rag/.venv/
+/awn-rag/__pycache__/
+/awn-rag/*.py[cod]
 
 # typescript
 *.tsbuildinfo

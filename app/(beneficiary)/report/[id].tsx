@@ -1,6 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { View } from 'react-native';
+import React from 'react';
+import { useState } from 'react';
+import { Alert, Linking, Platform, Pressable, View } from 'react-native';
+import { Image } from 'expo-image';
+import { WebView } from 'react-native-webview';
+import { translateExplanation } from '../../../src/services/reportExplanation';
 
 import {
   AppText,
@@ -25,7 +30,11 @@ export default function ReportDetail() {
     documents,
     palette,
     row,
+    updateDocument,
+    removeDocument,
   } = useUi();
+  const [translating, setTranslating] = useState(false);
+  const [showOriginal, setShowOriginal] = useState(false);
 
   const document =
     documents.find(
@@ -87,6 +96,65 @@ export default function ReportDetail() {
         ? fahimniFinding.simpleAr
         : fahimniFinding.simpleEn
       : null;
+
+  // Check if this is a new Awn explanation with full details
+  const hasAwnExplanation = !!document.summary;
+  const translation = document.translations?.[locale];
+  const activeTranslation = locale !== document.explanationLanguage ? translation : undefined;
+  const summary = activeTranslation?.summary ?? document.summary;
+  const keyPoints = activeTranslation?.keyPoints ?? document.keyPoints;
+  const terms = activeTranslation?.terms ?? document.terms;
+  const questionsForDoctor = activeTranslation?.questionsForDoctor ?? document.questionsForDoctor;
+  const nextSteps = activeTranslation?.nextSteps ?? document.nextSteps;
+  const disclaimer = activeTranslation?.disclaimer ?? document.disclaimer;
+
+  const handleTranslate = async () => {
+    if (!document.summary || translating) return;
+    setTranslating(true);
+    try {
+      const translated = await translateExplanation({
+        summary: document.summary,
+        key_points: document.keyPoints ?? [],
+        terms: document.terms ?? [],
+        questions_for_doctor: document.questionsForDoctor ?? [],
+        next_steps: document.nextSteps ?? [],
+        disclaimer: document.disclaimer ?? '',
+      }, locale);
+      updateDocument({
+        ...document,
+        translations: {
+          ...document.translations,
+          [locale]: {
+            summary: translated.summary,
+            keyPoints: translated.key_points,
+            terms: translated.terms,
+            questionsForDoctor: translated.questions_for_doctor,
+            nextSteps: translated.next_steps,
+            disclaimer: translated.disclaimer,
+          },
+        },
+      });
+    } catch {
+      Alert.alert(
+        locale === 'ar' ? 'تعذرت الترجمة' : 'Translation failed',
+        locale === 'ar' ? 'تعذر ترجمة تفاصيل التقرير. حاول مرة أخرى.' : 'Could not translate the report details. Please try again.'
+      );
+    } finally {
+      setTranslating(false);
+    }
+  };
+
+  const handleDelete = () => Alert.alert(
+    locale === 'ar' ? 'حذف التقرير؟' : 'Delete report?',
+    locale === 'ar' ? 'سيتم حذف التقرير من قائمة تقاريرك.' : 'This report will be removed from your reports.',
+    [
+      { text: locale === 'ar' ? 'إلغاء' : 'Cancel', style: 'cancel' },
+      { text: locale === 'ar' ? 'حذف' : 'Delete', style: 'destructive', onPress: () => {
+        removeDocument(document.id);
+        router.replace('/(beneficiary)/explain');
+      } },
+    ]
+  );
 
   return (
     <Screen scroll>
@@ -171,10 +239,216 @@ export default function ReportDetail() {
             tone="info"
           />
         </View>
+
+        <View style={[row, { marginTop: 14, gap: 10 }]}>
+          {document.originalUri ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setShowOriginal((visible) => !visible)}
+              style={[row, { alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, backgroundColor: palette.mint }]}
+            >
+              <Ionicons name="document-outline" size={18} color={palette.tealDark} />
+              <AppText size={13} weight="700" style={{ color: palette.tealDark }}>{showOriginal ? (locale === 'ar' ? 'إخفاء التقرير' : 'Hide report') : (locale === 'ar' ? 'عرض التقرير' : 'View report')}</AppText>
+            </Pressable>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            onPress={handleDelete}
+            style={[row, { alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, backgroundColor: palette.dangerSoft }]}
+          >
+            <Ionicons name="trash-outline" size={18} color={palette.danger} />
+            <AppText size={13} weight="700" style={{ color: palette.danger }}>{locale === 'ar' ? 'حذف' : 'Delete'}</AppText>
+          </Pressable>
+        </View>
       </Card>
 
-      {/* REAL FAHIMNI EXPLANATION */}
-      {explanation ? (
+      {showOriginal && document.originalUri ? (
+        <Card style={{ padding: 8, marginBottom: 16 }}>
+          {document.originalName.toLowerCase().match(/\.(jpe?g|png|webp)$/) ? (
+            <Image
+              source={{ uri: document.originalUri }}
+              contentFit="contain"
+              accessibilityLabel={locale === 'ar' ? 'صورة التقرير الأصلي' : 'Original report image'}
+              style={{ width: '100%', height: 560, backgroundColor: palette.bg, borderRadius: 10 }}
+            />
+          ) : Platform.OS === 'web' ? (
+            React.createElement('iframe', {
+              src: document.originalUri,
+              title: document.originalName,
+              style: { width: '100%', height: '70vh', border: 0, backgroundColor: '#fff' },
+            })
+          ) : (
+            <WebView
+              source={{ uri: document.originalUri }}
+              originWhitelist={['*']}
+              allowFileAccess
+              style={{ height: 640, backgroundColor: palette.bg, borderRadius: 10 }}
+            />
+          )}
+        </Card>
+      ) : null}
+
+      {hasAwnExplanation && document.explanationLanguage && locale !== document.explanationLanguage && !translation ? (
+        <Pressable
+          accessibilityRole="button"
+          disabled={translating}
+          onPress={() => void handleTranslate()}
+          style={[row, { alignItems: 'center', justifyContent: 'center', gap: 8, padding: 13, borderRadius: 12, backgroundColor: palette.tealDark, marginBottom: 12, opacity: translating ? 0.65 : 1 }]}
+        >
+          <Ionicons name="language" size={19} color="#fff" />
+          <AppText weight="700" style={{ color: '#fff' }}>
+            {translating
+              ? (locale === 'ar' ? 'جاري الترجمة...' : 'Translating...')
+              : (locale === 'ar' ? 'ترجمة تفاصيل التقرير إلى العربية' : 'Translate report details to English')}
+          </AppText>
+        </Pressable>
+      ) : null}
+
+      {/* AWN EXPLANATION */}
+      {hasAwnExplanation ? (
+        <>
+          {document.urgent ? (
+            <View
+              accessibilityRole="alert"
+              style={{
+                backgroundColor: palette.dangerSoft,
+                borderColor: palette.danger,
+                borderWidth: 1,
+                borderRadius: 12,
+                padding: 14,
+                marginBottom: 12,
+              }}
+            >
+              <View style={[row, { alignItems: 'center', gap: 8 }]}>
+                <Ionicons name="alert-circle" size={22} color={palette.danger} />
+                <AppText weight="700" style={{ color: palette.danger, flex: 1 }}>
+                  {locale === 'ar'
+                    ? 'تنبيه مهم: تواصل مع طبيبك قريباً. للطوارئ اتصل بـ 997.'
+                    : 'Important: contact your doctor soon. For emergencies, call 997.'}
+                </AppText>
+              </View>
+            </View>
+          ) : null}
+
+          <Card style={{ marginBottom: 12 }}>
+            <View style={[row, { justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 8 }]}>
+              <AppText size={16} weight="700">
+                {locale === 'ar' ? 'الخلاصة' : 'Summary'}
+              </AppText>
+              <SpeakBtn text={summary || ''} />
+            </View>
+            <AppText style={{ lineHeight: 25 }}>{summary}</AppText>
+          </Card>
+
+          {keyPoints && keyPoints.length > 0 ? (
+            <Card style={{ marginBottom: 12 }}>
+              <View style={[row, { justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 8 }]}>
+                <AppText size={16} weight="700">
+                  {locale === 'ar' ? 'أهم النقاط' : 'Key points'}
+                </AppText>
+                <SpeakBtn text={keyPoints.join('. ')} />
+              </View>
+              {keyPoints.map((item, index) => (
+                <View key={`kp-${index}`} style={[row, { alignItems: 'flex-start', gap: 8, marginTop: 6 }]}>
+                  <AppText weight="700" style={{ color: palette.tealDark }}>•</AppText>
+                  <AppText style={{ flex: 1 }}>{item}</AppText>
+                </View>
+              ))}
+            </Card>
+          ) : null}
+
+          {terms && terms.length > 0 ? (
+            <Card style={{ marginBottom: 12 }}>
+              <View style={[row, { justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 8 }]}>
+                <AppText size={16} weight="700">
+                  {locale === 'ar' ? 'مصطلحات ومعانيها' : 'Terms in plain language'}
+                </AppText>
+                <SpeakBtn text={terms.map(t => `${t.term}: ${t.meaning}`).join('. ')} />
+              </View>
+              {terms.map((item, index) => (
+                <View
+                  key={`term-${index}`}
+                  style={{
+                    paddingVertical: 9,
+                    borderBottomWidth: index < terms.length - 1 ? 1 : 0,
+                    borderBottomColor: palette.border,
+                  }}
+                >
+                  <AppText weight="700">{item.term}</AppText>
+                  <AppText muted style={{ marginTop: 3 }}>{item.meaning}</AppText>
+                </View>
+              ))}
+            </Card>
+          ) : null}
+
+          {questionsForDoctor && questionsForDoctor.length > 0 ? (
+            <Card style={{ marginBottom: 12 }}>
+              <View style={[row, { justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 8 }]}>
+                <AppText size={16} weight="700">
+                  {locale === 'ar' ? 'أسئلة يمكنك طرحها على الطبيب' : 'Questions for your doctor'}
+                </AppText>
+                <SpeakBtn text={questionsForDoctor.join('. ')} />
+              </View>
+              {questionsForDoctor.map((item, index) => (
+                <View key={`q-${index}`} style={[row, { alignItems: 'flex-start', gap: 8, marginTop: 6 }]}>
+                  <AppText weight="700" style={{ color: palette.tealDark }}>•</AppText>
+                  <AppText style={{ flex: 1 }}>{item}</AppText>
+                </View>
+              ))}
+            </Card>
+          ) : null}
+
+          {nextSteps && nextSteps.length > 0 ? (
+            <Card style={{ marginBottom: 12 }}>
+              <View style={[row, { justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 8 }]}>
+                <AppText size={16} weight="700">
+                  {locale === 'ar' ? 'خطوات تالية' : 'Next steps'}
+                </AppText>
+                <SpeakBtn text={nextSteps.join('. ')} />
+              </View>
+              {nextSteps.map((item, index) => (
+                <View key={`ns-${index}`} style={[row, { alignItems: 'flex-start', gap: 8, marginTop: 6 }]}>
+                  <AppText weight="700" style={{ color: palette.tealDark }}>•</AppText>
+                  <AppText style={{ flex: 1 }}>{item}</AppText>
+                </View>
+              ))}
+            </Card>
+          ) : null}
+
+          {document.sources && document.sources.length > 0 ? (
+            <Card style={{ marginBottom: 12 }}>
+              <AppText size={16} weight="700" style={{ marginBottom: 8 }}>
+                {locale === 'ar' ? 'مصادر وزارة الصحة' : 'Ministry of Health sources'}
+              </AppText>
+              {document.sources.map((source, index) => (
+                <Pressable
+                  key={`src-${index}`}
+                  accessibilityRole="link"
+                  onPress={() => {
+                    void Linking.openURL(source.url).catch(() => undefined);
+                  }}
+                  style={[row, { alignItems: 'center', gap: 8, paddingVertical: 7 }]}
+                >
+                  <Ionicons name="open-outline" size={17} color={palette.tealDark} />
+                  <AppText style={{ color: palette.tealDark, flex: 1 }}>
+                    {source.title || source.url}
+                  </AppText>
+                </Pressable>
+              ))}
+            </Card>
+          ) : null}
+
+          <Card>
+            <View style={[row, { alignItems: 'center', gap: 8 }]}>
+              <Ionicons name="information-circle" size={20} color={palette.info} />
+              <AppText weight="700" style={{ color: palette.info }}>
+                {locale === 'ar' ? 'تنويه طبي' : 'Medical disclaimer'}
+              </AppText>
+            </View>
+            <AppText muted style={{ marginTop: 8 }}>{disclaimer}</AppText>
+          </Card>
+        </>
+      ) : explanation ? (
         <Card
           style={{
             marginBottom: 16,
@@ -362,44 +636,46 @@ export default function ReportDetail() {
         </Card>
       )}
 
-      {/* Medical disclaimer */}
-      <Card>
-        <View
-          style={[
-            row,
-            {
-              alignItems: 'center',
-              gap: 8,
-            },
-          ]}
-        >
-          <Ionicons
-            name="information-circle"
-            size={20}
-            color={palette.info}
-          />
+      {/* Medical disclaimer - only show for non-Awn explanations */}
+      {!hasAwnExplanation && (
+        <Card>
+          <View
+            style={[
+              row,
+              {
+                alignItems: 'center',
+                gap: 8,
+              },
+            ]}
+          >
+            <Ionicons
+              name="information-circle"
+              size={20}
+              color={palette.info}
+            />
+
+            <AppText
+              weight="700"
+              style={{
+                color: palette.info,
+              }}
+            >
+              {tt(
+                'medicalDisclaimer'
+              )}
+            </AppText>
+          </View>
 
           <AppText
-            weight="700"
+            muted
             style={{
-              color: palette.info,
+              marginTop: 8,
             }}
           >
-            {tt(
-              'medicalDisclaimer'
-            )}
+            {tt('noDiagnose')}
           </AppText>
-        </View>
-
-        <AppText
-          muted
-          style={{
-            marginTop: 8,
-          }}
-        >
-          {tt('noDiagnose')}
-        </AppText>
-      </Card>
+        </Card>
+      )}
     </Screen>
   );
 }

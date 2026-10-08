@@ -48,7 +48,10 @@ function BigTabBar({ state, navigation, descriptors }: any) {
       }}
     >
       {visible.map((route: any) => {
-        const focused = state.routes[state.index]?.key === route.key;
+        const activeRoute = state.routes[state.index]?.name;
+        const focused = state.routes[state.index]?.key === route.key
+          || (route.name === 'explain' && activeRoute === 'report/[id]')
+          || (route.name === 'appointments' && activeRoute === 'appointment/[id]');
         const label = descriptors[route.key].options.title;
         return (
           <Pressable

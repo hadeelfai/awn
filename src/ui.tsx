@@ -6,7 +6,6 @@ import React from 'react';
 import {
     Pressable,
     ScrollView,
-    StyleSheet,
     Text,
     TextInput,
     View,
@@ -134,7 +133,7 @@ export function PrimaryButton({
         {
           minHeight: 56,
           borderRadius: radius.pill,
-          paddingHorizontal: 22,
+          paddingHorizontal: 7,
           alignItems: 'center',
           justifyContent: 'center',
           gap: 8,
@@ -149,7 +148,7 @@ export function PrimaryButton({
       <Text
         style={{
           color,
-          fontSize: fs(17),
+          fontSize: fs(14),
           fontWeight: '700',
           fontFamily: 'Cairo_700Bold',
         }}
@@ -320,7 +319,3 @@ export function HeroBand({ children }: { children: React.ReactNode }) {
     </LinearGradient>
   );
 }
-
-export const ui = StyleSheet.create({
-  gap: { gap: space.md },
-});

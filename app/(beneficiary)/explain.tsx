@@ -1,12 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import { File } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, Linking, Pressable, View } from 'react-native';
 
-import { API_URL } from '../../src/config';
+import {
+  explainReport,
+  type ExplainResponse,
+} from '../../src/services/reportExplanation';
 import {
   AppText,
   Card,
@@ -28,144 +30,90 @@ export default function Explain() {
 
   const [uploading, setUploading] =
     useState(false);
+  const [explanation, setExplanation] =
+    useState<ExplainResponse | null>(null);
+  const [uploadedName, setUploadedName] =
+    useState('');
 
-  /*
-   * Sends a PDF or image to the real
-   * Awn /reports/analyze endpoint.
-   */
   const analyzeReport = async (
     uri: string,
-    fileName: string
+    fileName: string,
+    mimeType?: string,
+    byteSize?: number
   ) => {
     try {
       setUploading(true);
-
-      const file = new File(uri);
-
-      const formData =
-        new FormData();
-
-      formData.append(
-        'report',
-        file,
-        fileName
+      setExplanation(null);
+      const result = await explainReport(
+        uri,
+        fileName,
+        mimeType,
+        locale,
+        byteSize
       );
+      setUploadedName(fileName);
 
-      const response =
-        await fetch(
-          `${API_URL}/reports/analyze`,
-          {
-            method: 'POST',
-            body: formData,
-          }
-        );
-
-      if (!response.ok) {
-        if (response.status === 413) {
-          throw new Error("FILE_TOO_LARGE");
-        }
-
-        throw new Error(`HTTP_${response.status}`);
+      if (!result.readable) {
+        setExplanation(result);
+        return;
       }
 
-      const data =
-        await response.json();
-
-      const report =
-        data.report ?? data;
-
-      if (!report?.explanation) {
-        throw new Error(
-          'No explanation returned from backend'
-        );
-      }
-
-      /*
-       * Convert the backend report into
-       * the frontend document format so
-       * the teammate's existing UI can
-       * continue displaying it.
-       */
-      const newDocument = {
-        id:
-          report.id ??
-          `DOC-${Date.now()}`,
-
-        titleAr:
-          'شرح التقرير الطبي',
-
-        titleEn:
-          'Medical Report Explanation',
-
-        kind:
-          'report' as const,
-
-        originalName:
-          report.fileName ??
-          fileName,
-
-        findings: [
-          {
-            nameAr:
-              'شرح فهمني',
-
-            nameEn:
-              'Fahimni Explanation',
-
+      // Save the document to the user's reports
+      {
+        const docKind = /lab|test|تحاليل|مختبر/i.test(`${result.document_type} ${fileName}`) ? 'lab' : 'report';
+        const reportTitle = fileName.replace(/\.[^.]+$/, '').trim() || result.document_type || (locale === 'ar' ? 'تقرير طبي' : 'Medical report');
+        const newDoc = {
+          id: `DOC-${Date.now()}`,
+          titleAr: reportTitle,
+          titleEn: reportTitle,
+          kind: docKind as 'lab' | 'prescription' | 'report' | 'instructions',
+          originalName: fileName,
+          originalUri: uri,
+          explanationLanguage: locale,
+          findings: result.key_points.map((point, i) => ({
+            nameAr: point,
+            nameEn: point,
             value: '',
             unit: '',
-
-            simpleAr:
-              report.explanation,
-
-            simpleEn:
-              report.explanation,
-          },
-        ],
-
-        createdAt:
-          report.createdAt ??
-          new Date().toISOString(),
-      };
-
-      addDocument(newDocument);
-
-      setUploading(false);
-
-      /*
-       * Open the explanation immediately
-       * after the analysis is complete.
-       */
-      router.push({
-        pathname:
-          '/(beneficiary)/report/[id]',
-
-        params: {
-          id: newDocument.id,
-          from: 'explain',
-        },
-      });
+            simpleAr: point,
+            simpleEn: point,
+          })),
+          createdAt: new Date().toISOString(),
+          summary: result.summary,
+          keyPoints: result.key_points,
+          terms: result.terms,
+          questionsForDoctor: result.questions_for_doctor,
+          nextSteps: result.next_steps,
+          urgent: result.urgent,
+          sources: result.sources,
+          disclaimer: result.disclaimer,
+        };
+        addDocument(newDoc);
+        router.replace({
+          pathname: '/(beneficiary)/report/[id]',
+          params: { id: newDoc.id, from: 'explain' },
+        });
+      }
     } catch (error) {
-      console.log(
-        'Report analysis failed:',
-        error
-      );
-
-      setUploading(false);
-
       Alert.alert(
         locale === 'ar'
-          ? 'تعذر تحليل التقرير'
-          : 'Could not analyze report',
+          ? 'تعذر شرح المستند'
+          : 'Could not explain document',
 
         error instanceof Error && error.message === 'FILE_TOO_LARGE'
           ? locale === 'ar'
-            ? 'حجم الملف أكبر من الحد المسموح. اختر ملفًا لا يتجاوز 25 ميجابايت.'
-            : 'The file is too large. Choose a file no larger than 25 MB.'
-          : locale === 'ar'
-            ? 'تعذر على عون تحليل الملف حالياً. حاول مرة أخرى.'
-            : 'Awn could not analyze the file right now. Please try again.'
+            ? 'الحد الأقصى لحجم الملف 10 ميجابايت.'
+            : 'The maximum file size is 10 MB.'
+            : error instanceof Error && error.message === 'UNSUPPORTED_FILE'
+            ? locale === 'ar'
+              ? 'اختر JPG أو PNG أو WEBP أو PDF فقط.'
+              : 'Choose a JPG, PNG, WEBP, or PDF file.'
+            : locale === 'ar'
+              ? 'تعذر على عون معالجة الملف حالياً. تأكد أن خادم awn-rag يعمل ثم حاول بصورة أوضح أو ملف PDF تجريبي.'
+              : 'Awn could not process the file. Check that the awn-rag server is running, then try a clearer photo or a sample PDF.'
       );
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -180,7 +128,9 @@ export default function Explain() {
             {
               type: [
                 'application/pdf',
-                'image/*',
+                'image/jpeg',
+                'image/png',
+                'image/webp',
               ],
 
               copyToCacheDirectory:
@@ -197,7 +147,9 @@ export default function Explain() {
 
         await analyzeReport(
           file.uri,
-          file.name
+          file.name,
+          file.mimeType,
+          file.size
         );
       } catch (error) {
         console.log(
@@ -233,6 +185,8 @@ export default function Explain() {
               ],
 
               allowsEditing: false,
+              preferredAssetRepresentationMode:
+                ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
 
               quality: 1,
             }
@@ -245,13 +199,22 @@ export default function Explain() {
         const asset =
           result.assets[0];
 
-        const fileName =
-          asset.fileName ??
-          `medical-image-${Date.now()}.jpg`;
+        const mimeType = asset.mimeType ?? undefined;
+        const extension = mimeType === 'image/png'
+          ? 'png'
+          : mimeType === 'image/webp'
+            ? 'webp'
+            : 'jpg';
+        const originalName = asset.fileName ?? `sample-image-${Date.now()}.${extension}`;
+        const fileName = /\.(jpe?g|png|webp)$/i.test(originalName)
+          ? originalName
+          : `${originalName.replace(/\.[^/.]+$/, '')}.${extension}`;
 
         await analyzeReport(
           asset.uri,
-          fileName
+          fileName,
+          mimeType,
+          asset.fileSize
         );
       } catch (error) {
         console.log(
@@ -272,6 +235,23 @@ export default function Explain() {
         );
       }
     };
+
+  const renderListSection = (
+    title: string,
+    items: string[]
+  ) => items.length > 0 ? (
+    <Card style={{ marginBottom: 12 }}>
+      <AppText size={16} weight="700" style={{ marginBottom: 8 }}>
+        {title}
+      </AppText>
+      {items.map((item, index) => (
+        <View key={`${title}-${index}`} style={[row, { alignItems: 'flex-start', gap: 8, marginTop: 6 }]}>
+          <AppText weight="700" style={{ color: palette.tealDark }}>•</AppText>
+          <AppText style={{ flex: 1 }}>{item}</AppText>
+        </View>
+      ))}
+    </Card>
+  ) : null;
 
   return (
     <Screen scroll>
@@ -400,6 +380,138 @@ export default function Explain() {
           </View>
         </Pressable>
       </View>
+
+      {explanation ? (
+        <View style={{ marginBottom: 20 }}>
+          <Card style={{ marginBottom: 12 }}>
+            <View style={[row, { alignItems: 'center', justifyContent: 'space-between', gap: 12 }]}>
+              <View style={{ flex: 1 }}>
+                <AppText size={17} weight="700">
+                  {locale === 'ar' ? 'نتيجة الشرح' : 'Explanation'}
+                </AppText>
+                <AppText muted size={13}>{uploadedName}</AppText>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={locale === 'ar' ? 'إغلاق النتيجة' : 'Dismiss result'}
+                onPress={() => {
+                  setExplanation(null);
+                  setUploadedName('');
+                }}
+                hitSlop={10}
+              >
+                <Ionicons name="close-circle-outline" size={24} color={palette.inkSoft} />
+              </Pressable>
+            </View>
+          </Card>
+
+          {!explanation.readable ? (
+            <Card style={{ marginBottom: 12 }}>
+              <AppText>{explanation.message}</AppText>
+            </Card>
+          ) : (
+            <>
+              {explanation.urgent ? (
+                <View
+                  accessibilityRole="alert"
+                  style={{
+                    backgroundColor: palette.dangerSoft,
+                    borderColor: palette.danger,
+                    borderWidth: 1,
+                    borderRadius: 12,
+                    padding: 14,
+                    marginBottom: 12,
+                  }}
+                >
+                  <View style={[row, { alignItems: 'center', gap: 8 }]}>
+                    <Ionicons name="alert-circle" size={22} color={palette.danger} />
+                    <AppText weight="700" style={{ color: palette.danger, flex: 1 }}>
+                      {locale === 'ar'
+                        ? 'تنبيه مهم: تواصل مع طبيبك قريباً. للطوارئ اتصل بـ 997.'
+                        : 'Important: contact your doctor soon. For emergencies, call 997.'}
+                    </AppText>
+                  </View>
+                </View>
+              ) : null}
+
+              <Card style={{ marginBottom: 12 }}>
+                <AppText size={16} weight="700" style={{ marginBottom: 8 }}>
+                  {locale === 'ar' ? 'الخلاصة' : 'Summary'}
+                </AppText>
+                <AppText style={{ lineHeight: 25 }}>{explanation.summary}</AppText>
+              </Card>
+
+              {renderListSection(
+                locale === 'ar' ? 'أهم النقاط' : 'Key points',
+                explanation.key_points
+              )}
+
+              {explanation.terms.length > 0 ? (
+                <Card style={{ marginBottom: 12 }}>
+                  <AppText size={16} weight="700" style={{ marginBottom: 8 }}>
+                    {locale === 'ar' ? 'مصطلحات ومعانيها' : 'Terms in plain language'}
+                  </AppText>
+                  {explanation.terms.map((item, index) => (
+                    <View
+                      key={`${item.term}-${index}`}
+                      style={{
+                        paddingVertical: 9,
+                        borderBottomWidth: index < explanation.terms.length - 1 ? 1 : 0,
+                        borderBottomColor: palette.border,
+                      }}
+                    >
+                      <AppText weight="700">{item.term}</AppText>
+                      <AppText muted style={{ marginTop: 3 }}>{item.meaning}</AppText>
+                    </View>
+                  ))}
+                </Card>
+              ) : null}
+
+              {renderListSection(
+                locale === 'ar' ? 'أسئلة يمكنك طرحها على الطبيب' : 'Questions for your doctor',
+                explanation.questions_for_doctor
+              )}
+              {renderListSection(
+                locale === 'ar' ? 'خطوات تالية' : 'Next steps',
+                explanation.next_steps
+              )}
+
+              {explanation.sources.length > 0 ? (
+                <Card style={{ marginBottom: 12 }}>
+                  <AppText size={16} weight="700" style={{ marginBottom: 8 }}>
+                    {locale === 'ar' ? 'مصادر وزارة الصحة' : 'Ministry of Health sources'}
+                  </AppText>
+                  {explanation.sources.map((source, index) => (
+                    <Pressable
+                      key={`${source.url}-${index}`}
+                      accessibilityRole="link"
+                      onPress={() => {
+                        void Linking.openURL(source.url).catch(() => undefined);
+                      }}
+                      style={[row, { alignItems: 'center', gap: 8, paddingVertical: 7 }]}
+                    >
+                      <Ionicons name="open-outline" size={17} color={palette.tealDark} />
+                      <AppText style={{ color: palette.tealDark, flex: 1 }}>
+                        {source.title || source.url}
+                      </AppText>
+                    </Pressable>
+                  ))}
+                </Card>
+              ) : null}
+
+              <Card>
+                <View style={[row, { alignItems: 'center', gap: 8 }]}>
+                  <Ionicons name="information-circle" size={20} color={palette.info} />
+                  <AppText weight="700" style={{ color: palette.info }}>
+                    {locale === 'ar' ? 'تنويه طبي' : 'Medical disclaimer'}
+                  </AppText>
+                </View>
+                <AppText muted style={{ marginTop: 8 }}>{explanation.disclaimer}</AppText>
+              </Card>
+            </>
+          )}
+        </View>
+      ) : null}
 
       {/* Reports */}
       <AppText

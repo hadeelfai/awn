@@ -75,6 +75,15 @@ export const saveAppointment = (appointment: Appointment) =>
     new Date().toISOString()
   );
 
+export async function deleteAppointmentRecord(appointmentId: string) {
+  await ensureSupabaseUser();
+  const { error } = await supabase
+    .from('awn_appointments')
+    .delete()
+    .eq('client_id', appointmentId);
+  if (error) throw error;
+}
+
 export const saveReport = (report: ExplainedDocument) =>
   saveRecord(
     'awn_reports',
@@ -82,6 +91,15 @@ export const saveReport = (report: ExplainedDocument) =>
     report,
     report.createdAt
   );
+
+export async function deleteReport(reportId: string) {
+  await ensureSupabaseUser();
+  const { error } = await supabase
+    .from('awn_reports')
+    .delete()
+    .eq('client_id', reportId);
+  if (error) throw error;
+}
 
 export const saveChatMessage = (message: ChatMessage) =>
   saveRecord(
@@ -91,6 +109,16 @@ export const saveChatMessage = (message: ChatMessage) =>
     message.createdAt,
     message.role
   );
+
+export async function deleteChatMessages(messageIds: string[]) {
+  if (!messageIds.length) return;
+  await ensureSupabaseUser();
+  const { error } = await supabase
+    .from('awn_chat_messages')
+    .delete()
+    .in('client_id', messageIds);
+  if (error) throw error;
+}
 
 export async function loadSyncedData() {
   await ensureSupabaseUser();

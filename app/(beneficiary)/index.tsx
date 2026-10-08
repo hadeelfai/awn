@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 
@@ -12,6 +13,7 @@ import {
   SpeakBtn,
   useUi,
 } from '../../src/ui';
+import { appointmentDateTime, formatAppointmentDate, getNextAppointment } from '../../src/services/appointmentTime';
 
 export default function Home() {
   const {
@@ -20,9 +22,19 @@ export default function Home() {
     palette,
     row,
     locale,
+    appointments,
   } = useUi();
 
   const isArabic = locale === 'ar';
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  const nextAppointment = getNextAppointment(appointments, new Date(now));
+  const daysUntilNext = nextAppointment
+    ? Math.max(0, Math.ceil(((appointmentDateTime(nextAppointment)?.getTime() ?? Date.now()) - Date.now()) / 86400000))
+    : null;
 
   return (
     <Screen scroll>
@@ -316,9 +328,9 @@ export default function Home() {
                     weight="700"
                     style={{ marginTop: 2 }}
                   >
-                    {isArabic
-                      ? 'عيادة العظام'
-                      : 'Orthopedics'}
+                    {nextAppointment
+                      ? (isArabic ? nextAppointment.specialtyAr : nextAppointment.specialtyEn)
+                      : isArabic ? 'لا توجد مواعيد قادمة' : 'No upcoming appointments'}
                   </AppText>
                 </View>
               </View>
@@ -339,9 +351,9 @@ export default function Home() {
                   color: palette.tealDark,
                 }}
               >
-                {isArabic
-                  ? 'بعد 3 أيام'
-                  : 'In 3 days'}
+                {nextAppointment
+                  ? isArabic ? `بعد ${daysUntilNext} يوم` : `In ${daysUntilNext} days`
+                  : isArabic ? 'احجز موعداً' : 'Book an appointment'}
               </AppText>
             </View>
           </View>
@@ -355,18 +367,18 @@ export default function Home() {
             <DetailRow
               icon="time-outline"
               text={
-                isArabic
-                  ? 'الأحد، 21 سبتمبر · 9:00 ص'
-                  : 'Sunday, Sep 21 · 9:00 AM'
+                nextAppointment
+                  ? `${formatAppointmentDate(nextAppointment.date, locale)} · ${nextAppointment.time}`
+                  : isArabic ? 'ستظهر مواعيدك القادمة هنا' : 'Your upcoming appointments will appear here'
               }
             />
 
             <DetailRow
               icon="location-outline"
               text={
-                isArabic
-                  ? 'مركز الرعاية الأولية — الروضة'
-                  : 'Primary care center — Al Rawdah'
+                nextAppointment
+                  ? (isArabic ? nextAppointment.facilityAr : nextAppointment.facilityEn)
+                  : isArabic ? 'افتح مواعيدي لإضافة موعد' : 'Open My Appointments to add one'
               }
             />
           </View>
@@ -415,14 +427,14 @@ export default function Home() {
             }}
           >
             {isArabic
-              ? 'جهّز تقريرك السابق وقائمة أدويتك، ودوّن أي تغيّرات أو أسئلة تريد مناقشتها مع الطبيب.'
-              : 'Prepare your previous report, medication list, and any changes or questions you want to discuss with your doctor.'}
+              ? 'أحضر هويتك وتأكيد الموعد وقائمة أدويتك وتقاريرك ذات الصلة. اتبع تعليمات المنشأة؛ لا تصم أو توقف دواءً إلا بتوجيه من فريق الرعاية.'
+              : 'Bring your ID, appointment confirmation, medication list, and relevant reports. Follow the facility’s instructions; do not fast or stop medication unless your care team tells you to.'}
           </AppText>
 
           <Pressable
-            onPress={() =>
-              router.push('/(beneficiary)/ask')
-            }
+            onPress={() => nextAppointment
+              ? router.push({ pathname: '/(beneficiary)/appointment/[id]', params: { id: nextAppointment.id, from: 'home' } })
+              : router.push('/(beneficiary)/ask')}
             style={{
               marginTop: 14,
               backgroundColor: palette.teal,
@@ -536,14 +548,12 @@ export default function Home() {
         <TimelineItem
           icon="calendar-outline"
           date={
-            isArabic
-              ? '21 سبتمبر'
-              : 'Sep 21'
+            nextAppointment ? `${formatAppointmentDate(nextAppointment.date, locale)} · ${nextAppointment.time}` : isArabic ? '—' : '—'
           }
           title={
-            isArabic
-              ? 'موعد عيادة العظام'
-              : 'Orthopedics appointment'
+            nextAppointment
+              ? (isArabic ? nextAppointment.specialtyAr : nextAppointment.specialtyEn)
+              : isArabic ? 'لا يوجد موعد قادم' : 'No upcoming appointment'
           }
           first
         />

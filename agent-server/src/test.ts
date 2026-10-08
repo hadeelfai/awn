@@ -5,6 +5,8 @@ import {
     resetConversation,
 } from "./agent.js";
 
+const demoUserId = "agent-test-user";
+
 async function main() {
   resetConversation();
 
@@ -12,7 +14,7 @@ async function main() {
   const message1 = "أبغى موعد عيون في جدة";
 
   console.log("Patient:", message1);
-  const response1 = await askAwn(message1);
+  const response1 = await askAwn(message1, demoUserId);
   console.log("\nAwn:", response1);
 
 
@@ -20,7 +22,7 @@ async function main() {
   const message2 = "أفضل الموعد الأول";
 
   console.log("\nPatient:", message2);
-  const response2 = await askAwn(message2);
+  const response2 = await askAwn(message2, demoUserId);
   console.log("\nAwn:", response2);
 
 
@@ -28,7 +30,7 @@ async function main() {
   const message3 = "نعم، أؤكد الحجز";
 
   console.log("\nPatient:", message3);
-  const response3 = await askAwn(message3);
+  const response3 = await askAwn(message3, demoUserId);
   console.log("\nAwn:", response3);
   console.log("\n----------------------------");
 console.log("BOOKED APPOINTMENTS:");

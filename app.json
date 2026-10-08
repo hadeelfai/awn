@@ -8,7 +8,8 @@
     "scheme": "awn",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.hadeelfai.awn"
     },
     "android": {
       "adaptiveIcon": {
@@ -35,7 +36,12 @@
         }
       ],
       "expo-image",
-      "expo-image-picker",
+      [
+        "expo-image-picker",
+        {
+          "microphonePermission": false
+        }
+      ],
       "expo-document-picker",
       "expo-sqlite"
     ],

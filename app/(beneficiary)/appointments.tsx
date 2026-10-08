@@ -1,10 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Modal, Pressable, ScrollView, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Linking, Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 
 import { API_URL } from '../../src/config';
 import { getSupabaseAccessToken } from '../../src/services/supabaseData';
+import MonthCalendar from '../../src/components/MonthCalendar';
+import { formatAppointmentDate, isUpcomingAppointment, localDateKey } from '../../src/services/appointmentTime';
 import {
   AppText,
   Card,
@@ -31,27 +33,15 @@ const specialties: Array<
     id: 'family',
     ar: 'طب الأسرة',
     en: 'Family medicine',
-    preparationAr: [
-      'أحضر الهوية.',
-      'وصل قبل الموعد بـ 15 دقيقة.',
-    ],
-    preparationEn: [
-      'Bring your ID.',
-      'Arrive 15 minutes early.',
-    ],
+    preparationAr: ['أحضر الهوية وتأكيد الموعد وقائمة أدويتك ذات الصلة.', 'اتبع تعليمات المركز الخاصة بموعدك.'],
+    preparationEn: ['Bring your ID, appointment confirmation, and relevant medication list.', 'Follow the center’s instructions for your appointment.'],
   },
   {
     id: 'internal',
     ar: 'الباطنة',
     en: 'Internal medicine',
-    preparationAr: [
-      'صم 8 ساعات إذا كان الموعد يتطلب تحاليل.',
-      'أحضر قائمة أدويتك الحالية.',
-    ],
-    preparationEn: [
-      'Fast for 8 hours if your visit includes lab work.',
-      'Bring a list of your current medications.',
-    ],
+    preparationAr: ['أحضر الهوية وقائمة أدويتك وتقاريرك ذات الصلة.', 'لا تصم أو توقف دواءً إلا إذا طلب منك فريق الرعاية ذلك.'],
+    preparationEn: ['Bring your ID, medication list, and relevant reports.', 'Do not fast or stop medication unless your care team tells you to.'],
   },
   {
     id: 'lab',
@@ -59,11 +49,11 @@ const specialties: Array<
     en: 'Laboratory',
     preparationAr: [
       'أحضر الهوية وطلب التحليل إن وجد.',
-      'اتبع تعليمات الصيام في طلب التحليل.',
+      'اتبع تعليمات التحضير المكتوبة لطلب التحليل؛ تختلف التعليمات حسب الفحص.',
     ],
     preparationEn: [
       'Bring your ID and lab request, if available.',
-      'Follow the fasting instructions on your lab request.',
+      'Follow the written preparation instructions for your specific test; instructions vary by test.',
     ],
   },
 ];
@@ -109,29 +99,14 @@ const appointmentTimes: Array<
     date: string;
     time: string;
   }
-> = [
-  {
-    id: 'sep-21',
-    ar: '21 سبتمبر، 9:30 ص',
-    en: 'September 21, 9:30 AM',
-    date: '2026-09-21',
-    time: '09:30',
-  },
-  {
-    id: 'sep-22',
-    ar: '22 سبتمبر، 11:00 ص',
-    en: 'September 22, 11:00 AM',
-    date: '2026-09-22',
-    time: '11:00',
-  },
-  {
-    id: 'sep-23',
-    ar: '23 سبتمبر، 1:15 م',
-    en: 'September 23, 1:15 PM',
-    date: '2026-09-23',
-    time: '13:15',
-  },
-];
+> = Array.from({ length: 3 }, (_, index) => {
+  const date = new Date();
+  date.setDate(date.getDate() + index + 1);
+  const dateValue = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const time = ['09:30', '11:00', '13:15'][index];
+  const label = new Intl.DateTimeFormat('en-SA-u-ca-gregory', { month: 'short', day: 'numeric' }).format(date);
+  return { id: `date-${dateValue}`, ar: `${date.toLocaleDateString('ar-SA-u-ca-gregory', { month: 'long', day: 'numeric' })} · ${time}`, en: `${label} · ${time}`, date: dateValue, time };
+});
 
 export default function Appointments() {
   const {
@@ -147,6 +122,13 @@ export default function Appointments() {
 
   const [activeTab, setActiveTab] =
     useState<'upcoming' | 'previous'>('upcoming');
+  const [calendarMode, setCalendarMode] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(localDateKey());
+  const [, setClock] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setClock(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   const [showBookingModal, setShowBookingModal] =
     useState(false);
@@ -165,6 +147,7 @@ export default function Appointments() {
 
   const [selectedTimeId, setSelectedTimeId] =
     useState<string | null>(null);
+  const [selectedSymptoms, setSelectedSymptoms] = useState('');
 
   // Real appointments coming from agent-server
   const [backendAppointments, setBackendAppointments] =
@@ -229,18 +212,14 @@ export default function Appointments() {
   ];
 
   const upcoming = appointments.filter(
-    (a) =>
-      a.status === 'upcoming' ||
-      a.status === 'updated' ||
-      a.status === 'booked' ||
-      !a.status
+    (a) => isUpcomingAppointment(a)
   );
 
   const past = appointments.filter(
-    (a) =>
-      a.status === 'completed' ||
-      a.status === 'cancelled'
+    (a) => !isUpcomingAppointment(a)
   );
+  const visibleAppointments = activeTab === 'upcoming' ? upcoming : past;
+  const dayAppointments = visibleAppointments.filter((a) => a.date === selectedDate);
 
   const handleDirectBooking = () => {
     setShowBookingModal(false);
@@ -305,12 +284,16 @@ export default function Appointments() {
 
         date: appointmentTime.date,
         time: appointmentTime.time,
+        symptoms: selectedSymptoms.trim() || undefined,
 
         preparationAr:
           specialty.preparationAr,
 
         preparationEn:
           specialty.preparationEn,
+
+        notesAr: 'حُفظت تفاصيل الموعد في تقويم عون فقط. لا يتصل هذا النموذج بنظام حجز المستشفى؛ يرجى التحقق من التوفر وتأكيد الموعد عبر صحتي أو مع المنشأة.',
+        notesEn: 'Appointment details are saved in Awn only. This prototype is not connected to the hospital booking system; verify availability and confirm with Sehhaty or the facility.',
       });
 
     if (!appointmentId) {
@@ -361,6 +344,7 @@ export default function Appointments() {
         ];
 
   const openBooking = () => {
+    setSelectedSymptoms('');
     setBookingStep(1);
     setShowBookingModal(true);
   };
@@ -440,7 +424,59 @@ export default function Appointments() {
         </Pressable>
       </View>
 
+
+          <Pressable
+            onPress={openBooking}
+            style={{
+              marginTop: 12,
+              marginBottom: 22,
+              borderRadius: 22,
+              backgroundColor: palette.tealDeep,
+              borderWidth: 2,
+              borderColor: palette.mint,
+              padding: 16,
+              alignItems: 'center',
+            }}
+          >
+            <View
+              style={[
+                row,
+                {
+                  alignItems: 'center',
+                  gap: 8,
+                },
+              ]}
+            >
+              <Ionicons
+                name="add"
+                size={22}
+                style={{
+                color: palette.mint}}
+              />
+
+              <AppText
+                size={16}
+                weight="700"
+                style={{
+                  color: palette.mint,
+                }}
+              >
+                {tt(
+                  'bookNewAppointment'
+                )}
+              </AppText>
+            </View>
+          </Pressable>
+
+
       {/* Upcoming appointments */}
+      <View style={[row, { justifyContent: 'flex-end', marginBottom: 12 }]}>
+        <Pressable onPress={() => setCalendarMode((value) => !value)} style={{ flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: palette.mint, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 9 }}>
+          <Ionicons name={calendarMode ? 'list-outline' : 'calendar-outline'} size={18} color={palette.tealDark} />
+          <AppText size={13} weight="700" style={{ color: palette.tealDark }}>{calendarMode ? (locale === 'ar' ? 'عرض القائمة' : 'List view') : (locale === 'ar' ? 'عرض التقويم' : 'Calendar view')}</AppText>
+        </Pressable>
+      </View>
+
       {activeTab === 'upcoming' ? (
         <>
           {upcoming.length === 0 ? (
@@ -459,6 +495,12 @@ export default function Appointments() {
                 {tt('bookNewAppointment')}
               </AppText>
             </Card>
+          ) : calendarMode ? (
+            <>
+              <MonthCalendar value={selectedDate} onChange={setSelectedDate} markedDates={visibleAppointments.map((a) => a.date)} />
+              <AppText size={16} weight="700" style={{ marginTop: 16, marginBottom: 10 }}>{formatAppointmentDate(selectedDate, locale)}</AppText>
+              {dayAppointments.length ? dayAppointments.map((apt) => <AppointmentCard key={apt.id} appointment={apt} />) : <Card><AppText muted>{locale === 'ar' ? 'لا توجد مواعيد في هذا اليوم.' : 'No appointments on this day.'}</AppText></Card>}
+            </>
           ) : (
             upcoming.map((apt) => (
               <AppointmentCard
@@ -468,45 +510,6 @@ export default function Appointments() {
             ))
           )}
 
-          <Pressable
-            onPress={openBooking}
-            style={{
-              marginTop: 24,
-              backgroundColor:
-                palette.tealDark,
-              borderRadius: 22,
-              padding: 16,
-              alignItems: 'center',
-            }}
-          >
-            <View
-              style={[
-                row,
-                {
-                  alignItems: 'center',
-                  gap: 8,
-                },
-              ]}
-            >
-              <Ionicons
-                name="add"
-                size={22}
-                color="#fff"
-              />
-
-              <AppText
-                size={16}
-                weight="700"
-                style={{
-                  color: '#fff',
-                }}
-              >
-                {tt(
-                  'bookNewAppointment'
-                )}
-              </AppText>
-            </View>
-          </Pressable>
         </>
       ) : (
         <>
@@ -516,6 +519,12 @@ export default function Appointments() {
                 {tt('noPrevious')}
               </AppText>
             </Card>
+          ) : calendarMode ? (
+            <>
+              <MonthCalendar value={selectedDate} onChange={setSelectedDate} markedDates={visibleAppointments.map((a) => a.date)} minDate="0000-01-01" />
+              <AppText size={16} weight="700" style={{ marginTop: 16, marginBottom: 10 }}>{formatAppointmentDate(selectedDate, locale)}</AppText>
+              {dayAppointments.length ? dayAppointments.map((apt) => <AppointmentCard key={apt.id} appointment={apt} />) : <Card><AppText muted>{locale === 'ar' ? 'لا توجد مواعيد في هذا اليوم.' : 'No appointments on this day.'}</AppText></Card>}
+            </>
           ) : (
             past.map((apt) => (
               <AppointmentCard
@@ -722,9 +731,11 @@ export default function Appointments() {
                     specialties.find(
                       (item) =>
                         item.id ===
-                        selectedSpecialtyId
+                      selectedSpecialtyId
                     )!
                   }
+                  symptoms={selectedSymptoms}
+                  onSymptomsChange={setSelectedSymptoms}
                 />
               </>
             ) : null}
@@ -798,14 +809,8 @@ function AppointmentCard({
     tt,
   } = useUi();
 
-  const isUpcoming =
-    appointment.status ===
-      'upcoming' ||
-    appointment.status ===
-      'updated' ||
-    appointment.status ===
-      'booked' ||
-    !appointment.status;
+  const isUpcoming = isUpcomingAppointment(appointment);
+  const isCancelled = appointment.status === 'cancelled';
 
   return (
     <Card
@@ -864,9 +869,11 @@ function AppointmentCard({
 
         <StatusPill
           label={
-            isUpcoming
-              ? tt('upcoming')
-              : tt('completed')
+            isCancelled
+              ? locale === 'ar' ? 'ملغى' : 'Cancelled'
+              : isUpcoming
+                ? tt('upcoming')
+                : locale === 'ar' ? 'سابق' : 'Past'
           }
           tone={
             isUpcoming
@@ -1182,9 +1189,13 @@ function ChoiceGroup({
 
 function PreparationPreview({
   specialty,
+  symptoms,
+  onSymptomsChange,
 }: {
   specialty:
     (typeof specialties)[number];
+  symptoms: string;
+  onSymptomsChange: (value: string) => void;
 }) {
   const {
     tt,
@@ -1215,6 +1226,19 @@ function PreparationPreview({
       >
         {tt('preparation')}
       </AppText>
+
+      <AppText size={14} weight="700" style={{ marginTop: 10, marginBottom: 6 }}>
+        {locale === 'ar' ? 'ما الأعراض أو سبب الزيارة؟ (اختياري)' : 'What symptoms or reason are you visiting for? (optional)'}
+      </AppText>
+      <TextInput
+        value={symptoms}
+        onChangeText={onSymptomsChange}
+        multiline
+        maxLength={2000}
+        placeholder={locale === 'ar' ? 'مثال: ألم في العظام منذ أسبوع' : 'Example: bone pain for one week'}
+        accessibilityLabel={locale === 'ar' ? 'الأعراض أو سبب الزيارة' : 'Symptoms or reason for visit'}
+        style={{ minHeight: 82, borderWidth: 1, borderColor: palette.border, borderRadius: 14, padding: 12, color: palette.ink, textAlign: locale === 'ar' ? 'right' : 'left', textAlignVertical: 'top', backgroundColor: palette.surface, marginBottom: 12 }}
+      />
 
       {preparations.map(
         (item) => (
@@ -1249,6 +1273,11 @@ function PreparationPreview({
           </View>
         )
       )}
+
+      <Pressable onPress={() => void Linking.openURL('https://www.moh.gov.sa/en/eservices/sehhaty/pages/appointment-booking-on-sehhaty.aspx')} style={{ marginTop: 8 }}>
+        <AppText size={12} weight="700" style={{ color: palette.tealDark, textDecorationLine: 'underline' }}>{locale === 'ar' ? 'مصدر وزارة الصحة: خدمة المواعيد عبر صحتي' : 'MOH source: appointment service in Sehhaty'}</AppText>
+      </Pressable>
+      <AppText muted size={12} style={{ marginTop: 8 }}>{locale === 'ar' ? 'التواريخ والأوقات هنا لا تمثل توفر المستشفى المباشر؛ تحقق من الموعد واحجزه رسمياً عبر صحتي أو المنشأة.' : 'These dates and times are not live hospital availability. Verify and book the official slot in Sehhaty or with the facility.'}</AppText>
     </Card>
   );
 }

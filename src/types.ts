@@ -1,7 +1,5 @@
 export type Locale = 'ar' | 'en';
-export type Priority = 'routine' | 'soon' | 'urgent';
 export type AppointmentStatus = 'upcoming' | 'completed' | 'cancelled' | 'updated';
-export type FacilityType = 'pharmacy' | 'hospital' | 'clinic' | 'center';
 export type NotificationType =
   | 'appointment_reminder'
   | 'appointment_update'
@@ -25,9 +23,24 @@ export type Appointment = {
   status: AppointmentStatus;
   preparationAr: string[];
   preparationEn: string[];
+  patientPreparationItems?: string[];
+  preparationByLanguage?: Partial<Record<Locale, AppointmentPreparation>>;
+  symptoms?: string;
+  bookingConversationId?: string;
   notesAr?: string;
   notesEn?: string;
   hasPrescription?: boolean;
+};
+
+export type AppointmentPreparation = {
+  cacheVersion?: number;
+  instructions: string[];
+  general_instructions?: string[];
+  general_note?: string;
+  sources: { title: string; url: string }[];
+  note: string;
+  emergency: boolean;
+  fallback?: boolean;
 };
 
 export type Prescription = {
@@ -45,22 +58,6 @@ export type Prescription = {
   sourceAppointmentId?: string;
 };
 
-export type Facility = {
-  id: string;
-  nameAr: string;
-  nameEn: string;
-  type: FacilityType;
-  addressAr: string;
-  addressEn: string;
-  hoursAr: string;
-  hoursEn: string;
-  phone: string;
-  distanceKm: number;
-  x: number;
-  y: number;
-  availabilityDemo: 'in_stock' | 'limited' | 'unknown';
-};
-
 export type AppNotification = {
   id: string;
   type: NotificationType;
@@ -71,15 +68,6 @@ export type AppNotification = {
   createdAt: string;
   read: boolean;
   href?: string;
-};
-
-export type FeedbackItem = {
-  id: string;
-  rating: number;
-  tags: string[];
-  comment?: string;
-  createdAt: string;
-  journey: string;
 };
 
 export type ChatOption = { id: string; labelAr: string; labelEn: string };
@@ -94,6 +82,7 @@ export type ChatAction = {
 
 export type ChatMessage = {
   id: string;
+  conversationId?: string;
   role: 'user' | 'awn' | 'system';
   textAr: string;
   textEn: string;
@@ -104,13 +93,7 @@ export type ChatMessage = {
   documentIds?: string[];
   suggestedAppointment?: Appointment;
   disclaimer?: boolean;
-};
-
-export type IntakeState = {
-  area?: string;
-  duration?: string;
-  urgency?: Priority;
-  step: 0 | 1 | 2 | 3 | 4;
+  sources?: { title: string; url: string }[];
 };
 
 export type LabFinding = {
@@ -128,6 +111,25 @@ export type ExplainedDocument = {
   titleEn: string;
   kind: 'lab' | 'prescription' | 'report' | 'instructions';
   originalName: string;
+  originalUri?: string;
+  explanationLanguage?: Locale;
   findings: LabFinding[];
   createdAt: string;
+  // Explanation details
+  summary?: string;
+  keyPoints?: string[];
+  terms?: { term: string; meaning: string }[];
+  questionsForDoctor?: string[];
+  nextSteps?: string[];
+  urgent?: boolean;
+  sources?: { title: string; url: string }[];
+  disclaimer?: string;
+  translations?: Partial<Record<Locale, {
+    summary: string;
+    keyPoints: string[];
+    terms: { term: string; meaning: string }[];
+    questionsForDoctor: string[];
+    nextSteps: string[];
+    disclaimer: string;
+  }>>;
 };

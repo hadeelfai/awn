@@ -513,7 +513,7 @@ const bookAppointment = tool({
 export const awnAgent = new Agent({
   name: "Awn",
 
-  model: "openrouter/free",
+    model: "openrouter/free",
 
   instructions: `
 You are Awn (عون), an AI-powered smart healthcare assistant.
@@ -623,7 +623,9 @@ You do not replace medical professionals.
 // CONVERSATION STATE
 // ============================================================
 
-let conversationHistory: AgentInputItem[] = [];
+// Keep short-lived conversation context isolated by authenticated Supabase user.
+// A single process-wide history can expose one beneficiary's messages to another.
+const conversationHistories = new Map<string, AgentInputItem[]>();
 
 // ============================================================
 // APPOINTMENT HELPERS
@@ -843,7 +845,7 @@ function isExplicitConfirmation(message: string) {
 // CHAT
 // ============================================================
 
-export async function askAwn(message: string) {
+export async function askAwn(message: string, userId: string) {
   // ----------------------------------------------------------
   // 1. CONFIRM A PENDING APPOINTMENT
   // ----------------------------------------------------------
@@ -944,15 +946,21 @@ export async function askAwn(message: string) {
   // 4. EVERYTHING ELSE -> AWN AI
   // ----------------------------------------------------------
 
+  const history = conversationHistories.get(userId) ?? [];
   const result = await run(awnAgent, [
-    ...conversationHistory,
+    ...history,
     {
       role: "user",
       content: message,
     },
   ]);
 
-  conversationHistory = result.history;
+  // Bound retained context and active users so this in-memory prototype stays small.
+  conversationHistories.set(userId, result.history.slice(-24));
+  if (conversationHistories.size > 500) {
+    const oldestUser = conversationHistories.keys().next().value;
+    if (oldestUser) conversationHistories.delete(oldestUser);
+  }
 
   return (
     result.finalOutput ??
@@ -979,6 +987,7 @@ export async function analyzeReportText(
     );
   }
 
+  const hasArabicText = /[\u0600-\u06FF]/.test(text);
   const reportAgent = new Agent({
     name: "Fahimni",
 
@@ -999,15 +1008,15 @@ Do NOT output classifications such as:
 or any moderation/category label.
 
 LANGUAGE:
-- Respond in Arabic.
+- Respond in the language used by the report. If it contains both Arabic and English, respond in Arabic.
 - Use simple, patient-friendly language.
 - Avoid unnecessary medical terminology.
 - Keep the entire response brief.
-- Aim for approximately 60-100 Arabic words.
+- Aim for approximately 60-100 words in the response language.
 - Do NOT explain every test or value separately.
 - Focus only on the overall picture and the most important finding.
 
-Use ONLY this structure:
+Use ONLY this structure, translated into the response language:
 
 ملخص التقرير:
 Give one or two short sentences describing the overall result.
@@ -1033,30 +1042,29 @@ SAFETY:
   });
 
   const prompt = `
-هذا نص تقرير طبي تم استخراجه من الملف:
+${hasArabicText ? "هذا نص تقرير طبي تم استخراجه من الملف:" : "This medical report text was extracted from the file:"}
 
---- بداية التقرير ---
+--- ${hasArabicText ? "بداية التقرير" : "Report begins"} ---
 
 ${text}
 
---- نهاية التقرير ---
+--- ${hasArabicText ? "نهاية التقرير" : "Report ends"} ---
 
-اشرح التقرير للمريض باختصار شديد وبأسلوب بسيط.
+${hasArabicText ? "اشرح التقرير للمريض باختصار شديد وبأسلوب بسيط." : "Explain the report to the patient briefly in simple language."}
 
-لا تشرح كل تحليل أو قيمة بشكل منفصل.
-ركز فقط على الصورة العامة وأهم ملاحظة تستحق الانتباه.
+${hasArabicText ? "لا تشرح كل تحليل أو قيمة بشكل منفصل. ركز فقط على الصورة العامة وأهم ملاحظة تستحق الانتباه." : "Do not explain every test or value separately. Focus on the overall picture and the most important finding."}
 
-يجب أن تكون الإجابة تقريبًا بين 60 و100 كلمة فقط.
+${hasArabicText ? "يجب أن تكون الإجابة تقريبًا بين 60 و100 كلمة فقط." : "Keep the answer to approximately 60–100 words."}
 
-استخدم هذه العناوين فقط:
+${hasArabicText ? "استخدم هذه العناوين فقط:" : "Use only these headings:"}
 
-ملخص التقرير:
+${hasArabicText ? "ملخص التقرير:" : "Report summary:"}
 
-أهم ملاحظة:
+${hasArabicText ? "أهم ملاحظة:" : "Key finding:"}
 
-الخطوة التالية:
+${hasArabicText ? "الخطوة التالية:" : "Next step:"}
 
-ابدأ مباشرة بعبارة "ملخص التقرير:".
+${hasArabicText ? 'ابدأ مباشرة بعبارة "ملخص التقرير:".' : 'Start directly with "Report summary:".'}
 `;
 
   let explanation = "";
@@ -1138,7 +1146,7 @@ export function saveReport(
 }
 
 export function resetConversation() {
-  conversationHistory = [];
+  conversationHistories.clear();
   lastSearchResults = [];
   pendingAppointment = null;
 }

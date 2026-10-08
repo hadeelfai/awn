@@ -1,4 +1,4 @@
-import type { AppNotification, Appointment, ExplainedDocument, Facility, Prescription } from '../types';
+import type { AppNotification, Appointment, ExplainedDocument, Prescription } from '../types';
 
 export const PATIENT = {
   id: 'PAT-1001',
@@ -23,16 +23,12 @@ export const initialAppointments: Appointment[] = [
     time: '10:00',
     status: 'upcoming',
     preparationAr: [
-      'صيام 8 ساعات قبل الموعد إلا إذا أخبرك الطبيب بغير ذلك.',
-      'أحضر الهوية وبطاقة التأمين إن وجدت.',
-      'أحضر قائمة أدويتك الحالية.',
-      'وصل قبل الموعد بـ 20 دقيقة لإنهاء الإجراءات.',
+      'أحضر الهوية وتأكيد الموعد وقائمة أدويتك وتقاريرك ذات الصلة.',
+      'اتبع تعليمات المنشأة لهذا الموعد؛ لا تصم أو توقف دواءً إلا بتوجيه من فريق الرعاية.',
     ],
     preparationEn: [
-      'Fast for 8 hours before the visit unless your clinician said otherwise.',
-      'Bring your ID and insurance card if you have one.',
-      'Bring a list of your current medications.',
-      'Arrive 20 minutes early for check-in.',
+      'Bring your ID, appointment confirmation, medication list, and relevant reports.',
+      'Follow the facility’s instructions; do not fast or stop medication unless your care team tells you to.',
     ],
   },
   {
@@ -98,84 +94,6 @@ export const initialPrescriptions: Prescription[] = [
   },
 ];
 
-export const facilities: Facility[] = [
-  {
-    id: 'FAC-1',
-    nameAr: 'صيدلية النهدي — حي الروضة',
-    nameEn: 'Nahdi Pharmacy — Al Rawdah',
-    type: 'pharmacy',
-    addressAr: 'جدة، حي الروضة، طريق الأمير سلطان',
-    addressEn: 'Jeddah, Al Rawdah, Prince Sultan Road',
-    hoursAr: 'مفتوح 24 ساعة',
-    hoursEn: 'Open 24 hours',
-    phone: '920000842',
-    distanceKm: 0.8,
-    x: 0.42,
-    y: 0.38,
-    availabilityDemo: 'in_stock',
-  },
-  {
-    id: 'FAC-2',
-    nameAr: 'صيدلية الدواء — الشرفية',
-    nameEn: 'Al-Dawaa Pharmacy — Al Sharafiyah',
-    type: 'pharmacy',
-    addressAr: 'جدة، حي الشرفية',
-    addressEn: 'Jeddah, Al Sharafiyah',
-    hoursAr: '8 صباحًا — 12 منتصف الليل',
-    hoursEn: '8:00 AM — 12:00 AM',
-    phone: '920001547',
-    distanceKm: 1.4,
-    x: 0.62,
-    y: 0.52,
-    availabilityDemo: 'limited',
-  },
-  {
-    id: 'FAC-3',
-    nameAr: 'مستشفى الملك عبدالعزيز',
-    nameEn: 'King Abdulaziz Hospital',
-    type: 'hospital',
-    addressAr: 'جدة، الشرفية',
-    addressEn: 'Jeddah, Al Sharafiyah',
-    hoursAr: 'طوارئ 24 ساعة',
-    hoursEn: 'Emergency 24 hours',
-    phone: '0126375555',
-    distanceKm: 2.1,
-    x: 0.7,
-    y: 0.28,
-    availabilityDemo: 'unknown',
-  },
-  {
-    id: 'FAC-4',
-    nameAr: 'عيادة الأسرة — حي السلامة',
-    nameEn: 'Family clinic — Al Salamah',
-    type: 'clinic',
-    addressAr: 'جدة، حي السلامة',
-    addressEn: 'Jeddah, Al Salamah',
-    hoursAr: '8 صباحًا — 4 مساءً',
-    hoursEn: '8:00 AM — 4:00 PM',
-    phone: '0126612000',
-    distanceKm: 2.8,
-    x: 0.28,
-    y: 0.62,
-    availabilityDemo: 'unknown',
-  },
-  {
-    id: 'FAC-5',
-    nameAr: 'مركز الرعاية الأولية — النزهة',
-    nameEn: 'Primary healthcare center — Al Nuzhah',
-    type: 'center',
-    addressAr: 'جدة، حي النزهة',
-    addressEn: 'Jeddah, Al Nuzhah',
-    hoursAr: '7:30 صباحًا — 3:30 مساءً',
-    hoursEn: '7:30 AM — 3:30 PM',
-    phone: '937',
-    distanceKm: 3.3,
-    x: 0.5,
-    y: 0.72,
-    availabilityDemo: 'in_stock',
-  },
-];
-
 export const initialNotifications: AppNotification[] = [
   {
     id: 'N-1',
@@ -232,9 +150,3 @@ export const demoLab: ExplainedDocument = {
     },
   ],
 };
-
-export const bookingSlots = [
-  { id: 'S1', date: '2026-09-21', time: '09:30', facilityAr: 'مركز الرعاية الأولية — الروضة', facilityEn: 'Primary care center — Al Rawdah', serviceAr: 'طب الأسرة', serviceEn: 'Family medicine' },
-  { id: 'S2', date: '2026-09-22', time: '11:00', facilityAr: 'مستشفى الملك عبدالعزيز', facilityEn: 'King Abdulaziz Hospital', serviceAr: 'طب الأسرة', serviceEn: 'Family medicine' },
-  { id: 'S3', date: '2026-09-23', time: '13:15', facilityAr: 'عيادة الأسرة — حي السلامة', facilityEn: 'Family clinic — Al Salamah', serviceAr: 'طب الأسرة', serviceEn: 'Family medicine' },
-];

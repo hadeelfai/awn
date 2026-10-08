@@ -65,7 +65,9 @@ async function extractPdfText(buffer: Buffer) {
 async function extractImageText(buffer: Buffer) {
   console.log("Starting image OCR...");
 
-  const worker = await createWorker("eng");
+  // Arabic lab reports are common in the target audience. Tesseract accepts a
+  // combined language list and will load both trained data sets as needed.
+  const worker = await createWorker("eng+ara");
 
   try {
     const result = await worker.recognize(buffer);
@@ -205,12 +207,12 @@ app.post("/chat", async (req, res) => {
       });
     }
 
-    await verifySupabaseUser(accessToken);
+    const userId = await verifySupabaseUser(accessToken);
     const previouslyBooked = new Set(
       getBookedAppointments().map((appointment) => appointment.id)
     );
 
-    const reply = await askAwn(message.trim());
+    const reply = await askAwn(message.trim(), userId);
     const newBookings = getBookedAppointments().filter(
       (appointment) => !previouslyBooked.has(appointment.id)
     );

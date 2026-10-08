@@ -1,0 +1,96 @@
+# One official MOH/WHO article page or direct PDF link per line.
+# Lines starting with # are ignored.
+#
+# Use ARTICLE pages and PDFs that contain the actual educational text.
+# Do NOT use home pages, category indexes, or "pages/default.aspx" listings.
+# Those ingest as menus and titles, so Ask will say it found nothing in the sources.
+#
+# Prefer Arabic pages when users ask in Arabic. After editing this file, run:
+#   python ingest.py
+
+# --- خدمات الوزارة ---
+https://www.moh.gov.sa/eservices/sehhaty/pages/appointment-booking-on-sehhaty.aspx
+https://www.moh.gov.sa/937/pages/default.aspx
+
+# --- حقوق المريض ---
+https://www.moh.gov.sa/HealthAwareness/EducationalContent/HealthTips/pages/001.aspx
+https://www.moh.gov.sa/HealthAwareness/EducationalContent/HealthTips/Documents/Patient-Bill-of-Rights-and-Responsibilities.pdf
+https://www.moh.gov.sa/awarenessplateform/patientsrights/pages/patientsrights.aspx
+
+# --- أمراض مزمنة ---
+https://www.moh.gov.sa/awarenessplateform/chronicdisease/pages/diabetes.aspx
+https://www.moh.gov.sa/healthawareness/educationalcontent/diseases/diabetic/pages/008.aspx
+https://www.moh.gov.sa/healthawareness/educationalcontent/diseases/diabetic/pages/diabetes-management.aspx
+https://www.moh.gov.sa/awarenessplateform/chronicdisease/pages/hypertension.aspx
+https://www.moh.gov.sa/awarenessplateform/chronicdisease/pages/asthma.aspx
+https://www.moh.gov.sa/awarenessplateform/chronicdisease/pages/obesity.aspx
+https://www.moh.gov.sa/awarenessplateform/chronicdisease/pages/cardiovasculardiseases.aspx
+
+# --- توعية عامة ---
+https://www.moh.gov.sa/awarenessplateform/varioustopics/pages/influenza.aspx
+https://www.moh.gov.sa/healthawareness/educationalcontent/publichealth/pages/seasonal-influenza.aspx
+https://www.moh.gov.sa/healthawareness/educationalcontent/publichealth/pages/safe-medications-use.aspx
+https://www.moh.gov.sa/awarenessplateform/varioustopics/pages/chickenpox.aspx
+
+# --- WHO: معلومات عامة أوسع عن الأمراض والصحة العامة ---
+https://www.who.int/news-room/fact-sheets/detail/anaemia
+https://www.who.int/news-room/fact-sheets/detail/anxiety-disorders
+https://www.who.int/news-room/fact-sheets/detail/chronic-obstructive-pulmonary-disease-(copd)
+https://www.who.int/news-room/fact-sheets/detail/epilepsy
+https://www.who.int/news-room/fact-sheets/detail/hepatitis
+https://www.who.int/news-room/fact-sheets/detail/kidney-disease
+https://www.who.int/news-room/fact-sheets/detail/low-back-pain
+https://www.who.int/news-room/fact-sheets/detail/malaria
+https://www.who.int/news-room/fact-sheets/detail/meningitis
+https://www.who.int/news-room/fact-sheets/detail/mental-disorders
+https://www.who.int/news-room/fact-sheets/detail/physical-activity
+https://www.who.int/news-room/fact-sheets/detail/pneumonia
+https://www.who.int/news-room/fact-sheets/detail/tuberculosis
+https://www.who.int/news-room/fact-sheets/detail/healthy-diet
+https://www.who.int/news-room/fact-sheets/detail/ageing-and-health
+
+# --- صحة الطفل ---
+https://www.moh.gov.sa/healthawareness/educationalcontent/babyhealth/pages/006.aspx
+https://www.moh.gov.sa/healthawareness/educationalcontent/babyhealth/pages/sore-throat-in-children.aspx
+https://www.moh.gov.sa/healthawareness/educationalcontent/babyhealth/pages/mychildissick.aspx
+
+# --- مواقع الخدمات الصحية والتخصصات ---
+# Facility/service directories help answer where a service is offered; they do not contain live appointment slots.
+https://www.moh.gov.sa/Ministry/Information-and-services/Documents/Psychological-health.pdf
+https://www.moh.gov.sa/awarenessplateform/VariousTopics/Documents/PTHospitals.pdf
+https://www.moh.gov.sa/healthawareness/on-duty-healthcare-centers/pages/jeddah.aspx
+
+# --- إدارة المواعيد والتحضير الآمن ---
+# Official booking, rescheduling, and cancellation instructions. This does not expose live Awn booking slots.
+https://www.moh.gov.sa/en/eservices/sehhaty/pages/appointment-booking-on-sehhaty.aspx
+# General preparation for discussing medicines and allergies at a medical visit.
+https://www.moh.gov.sa/awarenessplateform/varioustopics/pages/patient-safety.aspx
+# MOH article on rescheduling and cancelling Sehhaty appointments.
+https://www.moh.gov.sa/ministry/mediacenter/news/pages/news-2022-07-31-001.aspx
+# Patient rights include the right to receive examination cautions and instructions from the care team.
+https://www.moh.gov.sa/en/HealthAwareness/EducationalContent/HealthTips/Documents/Patient-Bill-of-Rights-and-Responsibilities.pdf
+
+# --- إسعافات أولية وإرشادات عملية من وزارة الصحة ---
+https://www.moh.gov.sa/en/awarenessplateform/firstaid/pages/choking.aspx
+https://www.moh.gov.sa/en/healthawareness/educationalcontent/firstaid/pages/001.aspx
+https://www.moh.gov.sa/en/awarenessplateform/FirstAid/Pages/Drowning.aspx
+https://www.moh.gov.sa/en/healthawareness/educationalcontent/wh/pages/008.aspx
+https://www.moh.gov.sa/en/healthawareness/educationalcontent/wh/pages/009.aspx
+https://www.moh.gov.sa/en/healthawareness/educationalcontent/diseases/heartcirculatory/pages/0011.aspx
+https://www.moh.gov.sa/en/healthawareness/educationalcontent/diseases/heartcirculatory/pages/hypertension-and-kidney-disease.aspx
+https://www.moh.gov.sa/en/awarenessplateform/chronicdisease/pages/asthma.aspx
+
+# --- مراجع منظمة الصحة العالمية: معلومات صحية عامة للأمراض الشائعة ---
+https://www.who.int/news-room/fact-sheets/detail/diabetes
+https://www.who.int/news-room/fact-sheets/detail/hypertension
+https://www.who.int/news-room/fact-sheets/detail/cardiovascular-diseases-(cvds)
+https://www.who.int/news-room/fact-sheets/detail/asthma
+https://www.who.int/news-room/fact-sheets/detail/cancer
+https://www.who.int/news-room/fact-sheets/detail/depression
+https://www.who.int/news-room/fact-sheets/detail/oral-health
+https://www.who.int/news-room/fact-sheets/detail/stroke
+https://www.who.int/news-room/fact-sheets/detail/dementia
+https://www.who.int/news-room/fact-sheets/detail/diarrhoeal-disease
+https://www.who.int/news-room/fact-sheets/detail/child-health
+https://www.who.int/news-room/fact-sheets/detail/antimicrobial-resistance
+https://www.who.int/news-room/fact-sheets/detail/self-care-health-interventions
