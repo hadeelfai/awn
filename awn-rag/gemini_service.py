@@ -24,12 +24,16 @@ client = genai.Client(
 )
 
 
-def _generation_config(*, system_instruction, response_mime_type=None, temperature=0.2):
+def _generation_config(*, system_instruction, response_mime_type=None, temperature=0.2, response_schema=None):
     config = {
         "system_instruction": system_instruction,
         "response_mime_type": response_mime_type,
         "temperature": temperature,
     }
+    # A Pydantic model here makes Gemini return JSON that matches it (enums included).
+    if response_schema is not None:
+        config["response_mime_type"] = "application/json"
+        config["response_schema"] = response_schema
     # Thinking levels are model-specific. Leave this unset by default to retain
     # compatibility with existing deployments; opt in only after verifying the model.
     if GEMINI_THINKING_LEVEL:
@@ -45,11 +49,13 @@ def generate_content(
     system_instruction: Optional[str] = None,
     response_mime_type: Optional[str] = None,
     temperature: float = 0.2,
+    response_schema=None,
 ):
     config = _generation_config(
         system_instruction=system_instruction,
         response_mime_type=response_mime_type,
         temperature=temperature,
+        response_schema=response_schema,
     )
     try:
         return client.models.generate_content(
