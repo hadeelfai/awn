@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from common import embed, get_conn
 from explain import router as explain_router
 from gemini_service import generate_content, generate_content_stream, response_text
+from red_flags import red_flag
 
 MAX_DISTANCE = float(os.getenv("MAX_DISTANCE", "0.6"))
 TOP_K = int(os.getenv("TOP_K", "8"))
@@ -23,7 +24,13 @@ MOH_PREPARATION_SOURCES = [
 ]
 
 app = FastAPI(title="Awn RAG")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+# Comma-separated list, e.g. "http://localhost:8081,https://awn.example.sa". Defaults to local dev only.
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:8081,http://localhost:19006").split(",")
+    if origin.strip()
+]
+app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 app.include_router(explain_router)
 
 SYSTEM = """You are Awn (عون), a general health information assistant for people in Saudi Arabia.
@@ -139,30 +146,16 @@ NO_ANSWER = (
     "لم أجد إجابة في المصادر المتاحة لدي. يمكنك التواصل مع مركز الاتصال الموحد 937.\n"
     "I couldn't find this in my sources. You can contact the Ministry of Health call center on 937."
 )
-EMERGENCY_PATTERNS = re.compile(
-    r"chest pain|chest hurts|trouble breathing|difficulty breathing|shortness of breath|"
-    r"heavy bleeding|stroke (?:signs|symptoms)|face drooping|weakness on one side|"
-    r"loss of consciousness|lost consciousness|unconscious|"
-    r"(?:ألم|الم|وجع)\s+(?:في\s+)?الصدر|ضيق\s+(?:في\s+)?التنفس|"
-    r"صعوبة\s+(?:في\s+)?التنفس|نزيف شديد|جلطة دماغية|"
-    r"سكتة دماغية|فقدان الوعي|فاقد الوعي|لا يستطيع التنفس",
-    re.IGNORECASE,
-)
-GENERAL_INFORMATION_QUESTION = re.compile(
-    r"^\s*(?:what\s+(?:is|are|causes?|does)\b|explain\b|define\b|tell\s+me\s+about\b|"
-    r"symptoms\s+of\b|information\s+about\b|ما\s+(?:هو|هي|معنى|أعراض|اعراض|أسباب|سبب)\b|"
-    r"اشرح\b|عرّف\b|عرف\b|حدثني\s+عن\b)",
-    re.IGNORECASE,
-)
-PERSONAL_SYMPTOM_CONTEXT = re.compile(
-    r"\b(?:i\s+(?:have|am|feel)|my\s+(?:chest|breathing|face|arm|leg)|"
-    r"he\s+(?:has|is)|she\s+(?:has|is)|they\s+(?:have|are))\b|"
-    r"\b(?:عندي|أعاني|اعاني|أشعر|اشعر|لدي|أمي|امي|أبي|ابي|طفلي|ابني|ابنتي)\b",
-    re.IGNORECASE,
-)
 EMERGENCY_ANSWER = (
     "هذه حالة طارئة. اتصل بالإسعاف على 997 الآن.\n"
     "This may be an emergency. Call 997 now."
+)
+# TODO(team): confirm the current official Saudi mental-health support line before release.
+SELF_HARM_ANSWER = (
+    "أنا آسف إنك تمر بهذا، وسلامتك أهم شي الحين. إذا كنت في خطر الآن اتصل بالإسعاف على 997. "
+    "وتقدر تتكلم مع مختص على 937 على مدار الساعة. لست وحدك، وفيه ناس تقدر تساعدك.\n"
+    "I'm sorry you're going through this, and your safety matters most right now. If you are in danger now, call 997. "
+    "You can also speak with someone at 937, 24/7. You are not alone."
 )
 NO_REFERENCE_NOTE = {
     "ar": "لم أعثر على مرجع مطابق في قاعدة عون؛ المعلومات التالية عامة وليست تشخيصًا.",
@@ -170,13 +163,12 @@ NO_REFERENCE_NOTE = {
 }
 
 
+SAFETY_ANSWERS = {"emergency": EMERGENCY_ANSWER, "self_harm": SELF_HARM_ANSWER}
+
+
 def describes_possible_emergency(question: str) -> bool:
-    """Escalate reported emergencies without treating every educational mention as an active event."""
-    if not EMERGENCY_PATTERNS.search(question):
-        return False
-    is_general_question = GENERAL_INFORMATION_QUESTION.search(question)
-    has_personal_context = PERSONAL_SYMPTOM_CONTEXT.search(question)
-    return not is_general_question or bool(has_personal_context)
+    """Kept for existing callers/tests: True for any red flag (emergency or self-harm)."""
+    return red_flag(question) is not None
 
 
 class ChatTurn(BaseModel):
@@ -275,8 +267,9 @@ def generate(question: str, context: str, history: Optional[list[ChatTurn]] = No
 
 @app.post("/ask")
 def ask(body: Ask):
-    if describes_possible_emergency(body.question):
-        answer, sources, reference_status = EMERGENCY_ANSWER, [], "emergency"
+    flag = red_flag(body.question)
+    if flag:
+        answer, sources, reference_status = SAFETY_ANSWERS[flag], [], "emergency"
     else:
         rows = []
         reference_status = "matched"
@@ -328,8 +321,9 @@ def encode_stream_event(event: dict) -> str:
 @app.post("/ask/stream")
 def ask_stream(body: Ask):
     """Stream answer text as NDJSON so the chat can render it as it arrives."""
-    if describes_possible_emergency(body.question):
-        answer, sources, reference_status = EMERGENCY_ANSWER, [], "emergency"
+    flag = red_flag(body.question)
+    if flag:
+        answer, sources, reference_status = SAFETY_ANSWERS[flag], [], "emergency"
         rows = []
     else:
         rows = []
@@ -420,8 +414,39 @@ def health():
         return {"ok": False, "chunks": 0}
 
 
+SPECIALTIES = {
+    "Internal Medicine": "الباطنة",
+    "Family Medicine": "طب الأسرة",
+    "Cardiology": "القلب",
+    "Dermatology": "الجلدية",
+    "Gastroenterology": "الجهاز الهضمي",
+    "Neurology": "الأعصاب",
+    "Orthopedics": "العظام",
+    "Pediatrics": "الأطفال",
+    "Psychiatry": "الطب النفسي",
+    "Ophthalmology": "العيون",
+    "ENT": "الأنف والأذن والحنجرة",
+    "General Surgery": "الجراحة العامة",
+    "Laboratory": "المختبر",
+}
+DEFAULT_SPECIALTY = "Family Medicine"
+
+
+def validated_specialty(specialty_en) -> tuple[str, str]:
+    """Never trust a model-invented specialty; fall back to Family Medicine."""
+    if isinstance(specialty_en, str):
+        for name in SPECIALTIES:
+            if specialty_en.strip().casefold() == name.casefold():
+                return name, SPECIALTIES[name]
+    return DEFAULT_SPECIALTY, SPECIALTIES[DEFAULT_SPECIALTY]
+
+
 @app.post("/analyze-symptoms")
 def analyze_symptoms(body: AnalyzeSymptoms):
+    flag = red_flag(body.symptoms)
+    if flag:
+        en, ar = validated_specialty(DEFAULT_SPECIALTY)
+        return {"specialty_ar": ar, "specialty_en": en, "emergency": True, "reason": SAFETY_ANSWERS[flag]}
     try:
         response = generate_content(
             contents=f"Symptoms: {body.symptoms}",
@@ -429,9 +454,16 @@ def analyze_symptoms(body: AnalyzeSymptoms):
             temperature=0.2,
             response_mime_type="application/json",
         )
-        import json
         result = json.loads(response_text(response) or "{}")
-        return result
+        if not isinstance(result, dict):
+            result = {}
+        en, ar = validated_specialty(result.get("specialty_en"))
+        return {
+            "specialty_ar": ar,
+            "specialty_en": en,
+            "emergency": bool(result.get("emergency")),
+            "reason": result.get("reason", "") if isinstance(result.get("reason"), str) else "",
+        }
     except Exception as error:
         raise HTTPException(502, "Could not analyze symptoms. Please try again.") from error
 
@@ -439,8 +471,9 @@ def analyze_symptoms(body: AnalyzeSymptoms):
 @app.post("/prepare-appointment")
 def prepare_appointment(body: PrepareAppointment):
     """Retrieve source-backed prep guidance for this patient's clinic and symptoms."""
-    if body.symptoms and EMERGENCY_PATTERNS.search(body.symptoms):
-        return {"instructions": [], "sources": [], "note": EMERGENCY_ANSWER, "emergency": True}
+    flag = red_flag(body.symptoms) if body.symptoms else None
+    if flag:
+        return {"instructions": [], "sources": [], "note": SAFETY_ANSWERS[flag], "emergency": True}
 
     # The symptom string is used only to retrieve applicable educational guidance.
     # It is not logged to query_log and cannot override the source-only policy.
@@ -589,11 +622,12 @@ def booking_conversation(body: BookingConversation):
         # Build conversation context
         state = body.conversation_state or {}
         first_symptom_turn = state.get("step") == "symptoms" and not state.get("symptoms")
-        if first_symptom_turn and describes_possible_emergency(body.user_message):
-            is_arabic = response_language_instruction(body.user_message) == "Arabic"
+        # Check EVERY turn: a patient may mention a red flag after the first message.
+        flag = red_flag(body.user_message)
+        if flag:
             return {
-                "response": "هذه حالة طارئة. اتصل بالإسعاف على 997 الآن." if is_arabic else "This may be an emergency. Call 997 now.",
-                "state": {**state, "step": "emergency", "symptoms": body.user_message},
+                "response": SAFETY_ANSWERS[flag],
+                "state": {**state, "step": "emergency", "symptoms": state.get("symptoms") or body.user_message},
                 "complete": False,
                 "confirmed": False,
                 "emergency": True,
@@ -627,10 +661,10 @@ def booking_conversation(body: BookingConversation):
             response_mime_type="application/json",
         )
         result = json.loads(response_text(response) or "{}")
-        if first_symptom_turn and result.get("emergency"):
-            is_arabic = response_language_instruction(body.user_message) == "Arabic"
+        if result.get("emergency"):
+            # Trust the model when it escalates, on any turn.
             return {
-                "response": "هذه حالة طارئة. اتصل بالإسعاف على 997 الآن." if is_arabic else "This may be an emergency. Call 997 now.",
+                "response": EMERGENCY_ANSWER,
                 "state": {**state, "step": "emergency"},
                 "complete": False,
                 "confirmed": False,
@@ -643,8 +677,8 @@ def booking_conversation(body: BookingConversation):
         result.setdefault("emergency", False)
         if first_symptom_turn:
             result["state"]["step"] = "date"
-            result["state"].setdefault("specialty_ar", "طب الأسرة")
-            result["state"].setdefault("specialty_en", "Family Medicine")
+            en, ar = validated_specialty(result["state"].get("specialty_en"))
+            result["state"]["specialty_en"], result["state"]["specialty_ar"] = en, ar
             result["state"].setdefault("specialty_reason", "")
 
         # Keep captured symptoms and specialty as the source of truth across
