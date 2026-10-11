@@ -30,3 +30,8 @@ create table if not exists query_log (
 -- Questions can contain personal information; keep logs private.
 alter table query_log enable row level security;
 revoke all on table query_log from anon, authenticated;
+
+-- Optional retention (only matters if LOG_QUERIES=true): delete logged questions after 30 days.
+-- Supabase: Database -> Extensions -> enable pg_cron, then run once:
+-- select cron.schedule('awn-query-log-retention', '0 3 * * *',
+--   $$delete from query_log where created_at < now() - interval '30 days'$$);
