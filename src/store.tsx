@@ -546,9 +546,7 @@ function useAppValue() {
         } else if (result.complete) {
           // Show confirmation button
           const confirmationNotice = responseLocale === 'ar'
-            ? '\n\nتنبيه: لن يتم حجز الفترة لدى المستشفى من هذا النموذج؛ سيُحفظ الطلب في تقويم عون فقط. تحقق من التوفر وأكّد الموعد عبر صحتي.'
-            : '\n\nNote: This prototype cannot reserve a hospital slot. It will save the request in Awn only; check availability and confirm the official appointment in Sehhaty.';
-          replyMsg.textAr += confirmationNotice;
+            
           replyMsg.textEn += confirmationNotice;
           replyMsg.actions = [
             {

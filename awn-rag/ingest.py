@@ -26,7 +26,10 @@ def fetch_text(url: str) -> str:
 
 def get_title(url: str, raw: str) -> str:
     match = re.search(r"^#\s+(.+)$", raw, re.M)
-    return match.group(1).strip() if match else url
+    title = match.group(1).strip() if match else url
+    if "medlineplus.gov/lab-tests/" in url:
+        return f"Source: MedlinePlus, National Library of Medicine — {title}"
+    return title
 
 
 def chunk(text: str) -> list[str]:

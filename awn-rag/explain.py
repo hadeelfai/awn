@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from google.genai import types
 
 from common import embed, get_conn
-from gemini_service import generate_content
+from gemini_service import generate_content, response_text
 
 MAX_DISTANCE = float(os.getenv("MAX_DISTANCE", "0.6"))
 MAX_BYTES = 10 * 1024 * 1024
@@ -49,14 +49,14 @@ def translate_explanation(body: TranslateExplanation):
         f"Explanation JSON: {json.dumps(source, ensure_ascii=False)}"
     )
     try:
-        translated = parse_json(generate(
+        translated = parse_json(response_text(generate(
             [prompt],
             system=(
                 f"Translate the supplied JSON into {target}. Preserve its keys and list lengths. "
                 "Return valid JSON only with summary, key_points, terms (term and meaning), "
                 "questions_for_doctor, next_steps, and disclaimer."
             ),
-        ).text or "")
+        )))
         return translated
     except Exception as error:
         print("explain translation failed:", type(error).__name__)
@@ -181,7 +181,7 @@ def explain(file: UploadFile = File(...), lang: str = Form("ar")):
         response = generate(
             [types.Part.from_bytes(data=data, mime_type=mime_type), READ_PROMPT]
         )
-        doc = parse_json(response.text or "")
+        doc = parse_json(response_text(response))
     except Exception as error:
         print("explain read failed:", error)
         raise HTTPException(502, "Could not read the document. Please try again.") from error
@@ -197,7 +197,7 @@ def explain(file: UploadFile = File(...), lang: str = Form("ar")):
         f"Sources for explaining terms:\n{context}"
     )
     try:
-        result = parse_json(generate([prompt], system=build_system(lang)).text or "")
+        result = parse_json(response_text(generate([prompt], system=build_system(lang))))
     except Exception as error:
         print("explain write failed:", error)
         raise HTTPException(502, "Could not write the explanation. Please try again.") from error

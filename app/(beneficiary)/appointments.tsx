@@ -292,9 +292,12 @@ export default function Appointments() {
         preparationEn:
           specialty.preparationEn,
 
+      /** 
         notesAr: 'حُفظت تفاصيل الموعد في تقويم عون فقط. لا يتصل هذا النموذج بنظام حجز المستشفى؛ يرجى التحقق من التوفر وتأكيد الموعد عبر صحتي أو مع المنشأة.',
         notesEn: 'Appointment details are saved in Awn only. This prototype is not connected to the hospital booking system; verify availability and confirm with Sehhaty or the facility.',
-      });
+     */
+     
+        });
 
     if (!appointmentId) {
       return;

@@ -1,9 +1,11 @@
-# One official MOH/WHO article page or direct PDF link per line.
+# One approved official or openly reusable article page or direct PDF per line.
 # Lines starting with # are ignored.
 #
 # Use ARTICLE pages and PDFs that contain the actual educational text.
 # Do NOT use home pages, category indexes, or "pages/default.aspx" listings.
 # Those ingest as menus and titles, so Ask will say it found nothing in the sources.
+# Add content only when it is public domain, openly licensed for reuse, or permission
+# has been granted. Do not crawl restricted third-party pages.
 #
 # Prefer Arabic pages when users ask in Arabic. After editing this file, run:
 #   python ingest.py
@@ -69,6 +71,8 @@ https://www.moh.gov.sa/awarenessplateform/varioustopics/pages/patient-safety.asp
 https://www.moh.gov.sa/ministry/mediacenter/news/pages/news-2022-07-31-001.aspx
 # Patient rights include the right to receive examination cautions and instructions from the care team.
 https://www.moh.gov.sa/en/HealthAwareness/EducationalContent/HealthTips/Documents/Patient-Bill-of-Rights-and-Responsibilities.pdf
+# MedlinePlus medical-test content is public domain; retain source attribution in Awn.
+https://medlineplus.gov/lab-tests/how-to-prepare-for-a-lab-test/
 
 # --- إسعافات أولية وإرشادات عملية من وزارة الصحة ---
 https://www.moh.gov.sa/en/awarenessplateform/firstaid/pages/choking.aspx
