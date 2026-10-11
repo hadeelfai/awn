@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from common import embed, get_conn
 from explain import router as explain_router
 from gemini_service import generate_content, generate_content_stream, response_text
-from red_flags import red_flag
+from red_flags import age_group, red_flag
 
 MAX_DISTANCE = float(os.getenv("MAX_DISTANCE", "0.6"))
 TOP_K = int(os.getenv("TOP_K", "8"))
@@ -78,6 +78,8 @@ Specialty guidance:
 - Skin symptoms generally point to Dermatology (الجلدية).
 - Digestive symptoms generally point to Gastroenterology (الجهاز الهضمي).
 - If symptoms are unclear or span several areas, suggest Family Medicine (طب الأسرة) for an initial assessment.
+- If the patient is a child under 14 and no organ-specific specialty clearly fits, suggest Pediatrics (الأطفال).
+- Set age_group to infant (under 1 year), child (under 14), adult, or unknown if the text does not say.
 - Use the patient's actual words and do not infer a diagnosis from a symptom.
 
 Rules:
@@ -88,6 +90,7 @@ Rules:
   - "specialty_ar": the specialty name in Arabic
   - "specialty_en": the specialty name in English
   - "emergency": true only if this is an emergency (call 997)
+  - "age_group": infant, child, adult, or unknown
   - "reason": brief explanation why this specialty is appropriate"""
 
 BOOKING_SYSTEM = """You are Awn (عون), a health information assistant helping patients book medical appointments.
@@ -96,6 +99,7 @@ You guide the patient through a conversation to collect booking information.
 Booking flow steps:
 1. On the first symptom turn, recommend a specialty and briefly explain why, recording the symptoms. Do not diagnose. For possible emergencies, return emergency=true and tell the patient to call 997.
    On later turns, use the specialty and symptoms already in conversation state; do not ask for them again.
+1b. If state.patient_age_group is missing or "unknown" and the conversation does not make the patient's age clear, ask ONE short question first: is the appointment for an adult, a child, or a baby under one year? Set state.patient_age_group to "adult", "child" (under 14), or "infant" (under 1 year). Do not ask again once it is set.
 2. Ask about preferred date (today, tomorrow, or a specific future date in YYYY-MM-DD format)
 3. Ask about preferred time (morning, afternoon, or specific time like 10:00)
 4. Ask for the patient's preferred city/area and facility, if they have one
@@ -119,7 +123,7 @@ Rules:
 - Do not say a hospital has booked or confirmed a slot. This service has no live scheduling connection.
 - Return JSON only with these keys:
   - "response": your conversational response to the patient
-  - "state": object with current booking state (step, symptoms, date, time, location, specialty_ar, specialty_en, patient_preparation_items)
+  - "state": object with current booking state (step, symptoms, patient_age_group, date, time, location, specialty_ar, specialty_en, patient_preparation_items)
   - "complete": true when all info collected and ready for confirmation
   - "confirmed": true when user confirms the booking
   - "emergency": true only when the patient's symptoms may require emergency care (call 997)
@@ -164,6 +168,35 @@ NO_REFERENCE_NOTE = {
 
 
 SAFETY_ANSWERS = {"emergency": EMERGENCY_ANSWER, "self_harm": SELF_HARM_ANSWER}
+
+# Question logging is OFF unless explicitly enabled. When on, obvious identifiers are masked first.
+LOG_QUERIES = os.getenv("LOG_QUERIES", "false").strip().lower() in {"1", "true", "yes"}
+_IDENTIFIERS = re.compile(
+    r"[\w.+-]+@[\w-]+\.[\w.]+"                 # email
+    r"|(?:\+?966|0)?5\d(?:[\s-]?\d){7}"          # Saudi mobile
+    r"|\b[12]\d{9}\b"                            # national ID / iqama (10 digits)
+    r"|\d[\d\s-]{7,}\d"                          # any other long number
+)
+
+
+def redact(text: str) -> str:
+    text = text.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789"))
+    return _IDENTIFIERS.sub("[REDACTED]", text)
+
+
+def log_query(question: str, answer: str, source_urls: list[str]) -> None:
+    if not LOG_QUERIES:
+        return
+    try:
+        with get_conn() as conn:
+            conn.execute(
+                "insert into query_log (question, answer, source_urls) values (%s, %s, %s)",
+                (redact(question), redact(answer), source_urls),
+            )
+            conn.commit()
+    except Exception as error:
+        # Logging must not prevent the answer from reaching the patient.
+        print("Could not log Awn question:", type(error).__name__)
 
 
 def describes_possible_emergency(question: str) -> bool:
@@ -301,16 +334,7 @@ def ask(body: Ask):
                 seen.add(url)
                 sources.append({"title": title or url, "url": url})
 
-    try:
-        with get_conn() as conn:
-            conn.execute(
-                "insert into query_log (question, answer, source_urls) values (%s, %s, %s)",
-                (body.question, answer, [source["url"] for source in sources]),
-            )
-            conn.commit()
-    except Exception as error:
-        # Logging must not prevent the answer from reaching the patient.
-        print("Could not log Awn question:", type(error).__name__)
+    log_query(body.question, answer, [source["url"] for source in sources])
     return {"answer": answer, "sources": sources, "reference_status": reference_status}
 
 
@@ -386,15 +410,7 @@ def ask_stream(body: Ask):
                 yield encode_stream_event({"type": "delta", "text": NO_ANSWER})
 
         complete_answer = "".join(answer_parts)
-        try:
-            with get_conn() as conn:
-                conn.execute(
-                    "insert into query_log (question, answer, source_urls) values (%s, %s, %s)",
-                    (body.question, complete_answer, [source["url"] for source in sources]),
-                )
-                conn.commit()
-        except Exception as error:
-            print("Could not log Awn question:", type(error).__name__)
+        log_query(body.question, complete_answer, [source["url"] for source in sources])
         yield encode_stream_event({"type": "done"})
 
     return StreamingResponse(
@@ -430,6 +446,28 @@ SPECIALTIES = {
     "Laboratory": "المختبر",
 }
 DEFAULT_SPECIALTY = "Family Medicine"
+SpecialtyEn = Literal[
+    "Internal Medicine", "Family Medicine", "Cardiology", "Dermatology", "Gastroenterology",
+    "Neurology", "Orthopedics", "Pediatrics", "Psychiatry", "Ophthalmology", "ENT",
+    "General Surgery", "Laboratory",
+]
+AgeGroup = Literal["infant", "child", "adult", "unknown"]
+# Adult-oriented first-contact clinics that should become Pediatrics for children.
+PEDIATRIC_OVERRIDE = {"Family Medicine", "Internal Medicine"}
+
+
+class SymptomAnalysis(BaseModel):
+    """Gemini must return exactly this shape; specialty is limited to the 13 options."""
+    specialty_en: SpecialtyEn
+    emergency: bool
+    age_group: AgeGroup
+    reason: str
+
+
+def apply_age_rules(specialty_en: str, group) -> tuple[str, str]:
+    if group in {"infant", "child"} and specialty_en in PEDIATRIC_OVERRIDE:
+        return "Pediatrics", SPECIALTIES["Pediatrics"]
+    return specialty_en, SPECIALTIES[specialty_en]
 
 
 def validated_specialty(specialty_en) -> tuple[str, str]:
@@ -452,15 +490,18 @@ def analyze_symptoms(body: AnalyzeSymptoms):
             contents=f"Symptoms: {body.symptoms}",
             system_instruction=SYMPTOM_ANALYSIS_SYSTEM,
             temperature=0.2,
-            response_mime_type="application/json",
+            response_schema=SymptomAnalysis,
         )
         result = json.loads(response_text(response) or "{}")
         if not isinstance(result, dict):
             result = {}
-        en, ar = validated_specialty(result.get("specialty_en"))
+        en, _ = validated_specialty(result.get("specialty_en"))
+        group = age_group(body.symptoms) or result.get("age_group")
+        en, ar = apply_age_rules(en, group)
         return {
             "specialty_ar": ar,
             "specialty_en": en,
+            "age_group": group if group in {"infant", "child", "adult"} else "unknown",
             "emergency": bool(result.get("emergency")),
             "reason": result.get("reason", "") if isinstance(result.get("reason"), str) else "",
         }
@@ -633,6 +674,23 @@ def booking_conversation(body: BookingConversation):
                 "emergency": True,
             }
 
+        detected_age = age_group(body.user_message)
+        if detected_age and state.get("patient_age_group") in (None, "", "unknown"):
+            state = {**state, "patient_age_group": detected_age}
+        # Fever in a baby can surface across turns ("he has a fever" ... "he's 6 weeks").
+        earlier = state.get("symptoms", "") or ""
+        if state.get("patient_age_group") == "infant" and any(
+            red_flag(text) == "emergency"
+            for text in (f"{body.user_message} {earlier}", f"{earlier} {body.user_message}")
+        ):
+            return {
+                "response": EMERGENCY_ANSWER,
+                "state": {**state, "step": "emergency"},
+                "complete": False,
+                "confirmed": False,
+                "emergency": True,
+            }
+
         if first_symptom_turn:
             # Capture symptoms now; the same model response recommends a
             # specialty and asks for the date, avoiding a second model round trip.
@@ -675,11 +733,18 @@ def booking_conversation(body: BookingConversation):
         else:
             result["state"] = state
         result.setdefault("emergency", False)
+        if result["state"].get("patient_age_group") not in {"infant", "child", "adult"}:
+            result["state"]["patient_age_group"] = state.get("patient_age_group") or "unknown"
         if first_symptom_turn:
             result["state"]["step"] = "date"
-            en, ar = validated_specialty(result["state"].get("specialty_en"))
+            en, _ = validated_specialty(result["state"].get("specialty_en"))
+            en, ar = apply_age_rules(en, result["state"]["patient_age_group"])
             result["state"]["specialty_en"], result["state"]["specialty_ar"] = en, ar
             result["state"].setdefault("specialty_reason", "")
+        elif result["state"]["patient_age_group"] in {"infant", "child"} and state.get("specialty_en"):
+            # Age learned after the first turn can still move an adult clinic to Pediatrics.
+            en, ar = apply_age_rules(state["specialty_en"], result["state"]["patient_age_group"])
+            state = {**state, "specialty_en": en, "specialty_ar": ar}
 
         # Keep captured symptoms and specialty as the source of truth across
         # later turns even if generated JSON omits or changes them.
