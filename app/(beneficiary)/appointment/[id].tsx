@@ -25,29 +25,38 @@ export default function AppointmentDetail() {
   const [prepResult, setPrepResult] = useState<AppointmentPreparation | null>(null);
   const [prepLoading, setPrepLoading] = useState(false);
   const cachedPreparation = appointment?.preparationByLanguage?.[locale];
+  const otherLocale = locale === 'ar' ? 'en' : 'ar';
+  const otherLanguagePreparation = appointment?.preparationByLanguage?.[otherLocale];
   const goBack = () => from === 'appointments' ? router.replace('/(beneficiary)/appointments') : router.canGoBack() ? router.back() : router.replace('/(beneficiary)/appointments');
 
   useEffect(() => {
     if (!appointment || !isUpcomingAppointment(appointment)) return;
     let current = true;
-    if (cachedPreparation?.cacheVersion === PREPARATION_CACHE_VERSION) {
+    if (cachedPreparation) {
       setPrepResult(cachedPreparation);
       setPrepLoading(false);
       return () => { current = false; };
     }
     setPrepResult(null);
     setPrepLoading(true);
-    fetch(`${AWN_RAG_URL}/prepare-appointment`, {
+    const shouldTranslateSavedPreparation = Boolean(otherLanguagePreparation);
+    fetch(`${AWN_RAG_URL}${shouldTranslateSavedPreparation ? '/prepare-appointment/translate' : '/prepare-appointment'}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        symptoms: appointment.symptoms ?? '',
-        specialty: locale === 'ar' ? appointment.specialtyAr : appointment.specialtyEn,
-        facility: locale === 'ar' ? appointment.facilityAr : appointment.facilityEn,
-        appointment_type: locale === 'ar' ? appointment.specialtyAr : appointment.specialtyEn,
-        patient_items: appointment.patientPreparationItems ?? [],
-        language: locale,
-      }),
+      body: JSON.stringify(shouldTranslateSavedPreparation
+        ? {
+            source_language: otherLocale,
+            target_language: locale,
+            preparation: otherLanguagePreparation,
+          }
+        : {
+            symptoms: appointment.symptoms ?? '',
+            specialty: locale === 'ar' ? appointment.specialtyAr : appointment.specialtyEn,
+            facility: locale === 'ar' ? appointment.facilityAr : appointment.facilityEn,
+            appointment_type: locale === 'ar' ? appointment.specialtyAr : appointment.specialtyEn,
+            patient_items: appointment.patientPreparationItems ?? [],
+            language: locale,
+          }),
     }).then((response) => {
       if (!response.ok) throw new Error(`preparation_http_${response.status}`);
       return response.json();
@@ -60,12 +69,21 @@ export default function AppointmentDetail() {
         if (!current) return;
         const persistedPreparation = { ...preparation, cacheVersion: PREPARATION_CACHE_VERSION };
         setPrepResult(persistedPreparation);
-        if (!preparation.fallback || preparation.instructions.length > 0) {
+        if (shouldTranslateSavedPreparation || !preparation.fallback || preparation.instructions.length > 0) {
           saveAppointmentPreparation(appointment.id, locale, persistedPreparation);
         }
       })
       .catch((error) => {
         if (!current) return;
+        if (shouldTranslateSavedPreparation && otherLanguagePreparation) {
+          setPrepResult({
+            ...otherLanguagePreparation,
+            note: locale === 'ar'
+              ? 'تعذرت ترجمة التحضيرات المحفوظة الآن؛ نعرض النص المحفوظ بلغته الأصلية.'
+              : 'Could not translate the saved preparation right now; showing the saved text in its original language.',
+          });
+          return;
+        }
         const errorCode = error instanceof Error ? error.message : '';
         const serverStatus = errorCode.match(/^preparation_http_(\d+)$/)?.[1];
         console.warn('Appointment preparation request failed:', errorCode || error);
@@ -85,7 +103,7 @@ export default function AppointmentDetail() {
       })
       .finally(() => { if (current) setPrepLoading(false); });
     return () => { current = false; };
-  }, [appointment?.id, appointment?.symptoms, appointment?.patientPreparationItems, appointment?.specialtyAr, appointment?.specialtyEn, appointment?.facilityAr, appointment?.facilityEn, cachedPreparation, locale, saveAppointmentPreparation]);
+  }, [appointment?.id, appointment?.symptoms, appointment?.patientPreparationItems, appointment?.specialtyAr, appointment?.specialtyEn, appointment?.facilityAr, appointment?.facilityEn, cachedPreparation, otherLanguagePreparation, otherLocale, locale, saveAppointmentPreparation]);
 
   if (!appointment) return <Screen><TopBar title={tt('appointment')} back right={null} onBack={goBack} /><AppText>{tt('notFound')}</AppText></Screen>;
 

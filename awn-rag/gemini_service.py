@@ -14,6 +14,8 @@ GEMINI_TIMEOUT_MS = int(os.getenv("GEMINI_TIMEOUT_MS", "25000"))
 # instead of spending up to a minute in the SDK's default retry backoff.
 FALLBACK_ERROR_CODES = {404}
 RETRY_WITH_FALLBACK_ERROR_CODES = {408, 429, 500, 502, 503, 504}
+TRANSPORT_ERRORS = (httpx.TimeoutException, httpx.ConnectError)
+GEMINI_RETRY_ERRORS = (errors.APIError, httpx.TimeoutException, httpx.ConnectError)
 
 client = genai.Client(
     api_key=os.environ["GEMINI_API_KEY"],
@@ -63,9 +65,9 @@ def generate_content(
             contents=contents,
             config=config,
         )
-    except (errors.APIError, httpx.TimeoutException) as error:
+    except GEMINI_RETRY_ERRORS as error:
         should_fallback = (
-            isinstance(error, httpx.TimeoutException)
+            isinstance(error, TRANSPORT_ERRORS)
             or error.code in FALLBACK_ERROR_CODES | RETRY_WITH_FALLBACK_ERROR_CODES
         )
         if not should_fallback or GEMINI_FALLBACK_MODEL == GEMINI_MODEL:
@@ -118,9 +120,9 @@ def generate_content_stream(
             if response_text(chunk):
                 sent_text = True
             yield chunk
-    except (errors.APIError, httpx.TimeoutException) as error:
+    except GEMINI_RETRY_ERRORS as error:
         should_fallback = (
-            isinstance(error, httpx.TimeoutException)
+            isinstance(error, TRANSPORT_ERRORS)
             or error.code in FALLBACK_ERROR_CODES | RETRY_WITH_FALLBACK_ERROR_CODES
         )
         if (

@@ -110,6 +110,18 @@ export const saveChatMessage = (message: ChatMessage) =>
     message.role
   );
 
+export async function loadSyncedAppointments(): Promise<Appointment[]> {
+  await ensureSupabaseUser();
+  const { data, error } = await supabase
+    .from('awn_appointments')
+    .select('client_id, payload')
+    .order('created_at', { ascending: false })
+    .limit(200);
+
+  if (error) throw error;
+  return (data ?? []).map((row) => row.payload as Appointment);
+}
+
 export async function deleteChatMessages(messageIds: string[]) {
   if (!messageIds.length) return;
   await ensureSupabaseUser();
@@ -137,7 +149,8 @@ export async function loadSyncedData() {
     supabase
       .from('awn_chat_messages')
       .select('client_id, payload')
-      .order('created_at', { ascending: true })
+      // Fetch the newest page first so older rows cannot crowd recent chats out.
+      .order('created_at', { ascending: false })
       .limit(500),
   ]);
 
@@ -152,8 +165,8 @@ export async function loadSyncedData() {
     reports: (reports.data ?? []).map(
       (row) => row.payload as ExplainedDocument
     ),
-    messages: (messages.data ?? []).map(
-      (row) => row.payload as ChatMessage
-    ),
+    messages: (messages.data ?? [])
+      .reverse()
+      .map((row) => row.payload as ChatMessage),
   };
 }

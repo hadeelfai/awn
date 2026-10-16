@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radius, space } from '../../src/theme';
-import { AppText, Card, Field, LangSwitch, SpeakBtn, StatusPill, useUi } from '../../src/ui';
+import { AppText, Card, LangSwitch, SpeakBtn, StatusPill, useUi } from '../../src/ui';
 import { Image } from 'expo-image';
 
 type BrowserSpeechRecognitionEvent = Event & {
@@ -30,6 +30,28 @@ type SpeechWindow = Window & {
   webkitSpeechRecognition?: new () => BrowserSpeechRecognition;
 };
 
+type AnswerBlock =
+  | { kind: 'heading'; text: string }
+  | { kind: 'paragraph'; text: string }
+  | { kind: 'bullet'; text: string };
+
+function parseAnswerBlocks(text: string): AnswerBlock[] {
+  return text.split(/\r?\n/).flatMap((rawLine) => {
+    const line = rawLine.trim();
+    if (!line) return [];
+
+    const markdownHeading = line.match(/^#{1,3}\s+(.+)$/);
+    const boldHeading = line.match(/^\*\*(.+?)\*\*:?$/);
+    const labelHeading = line.match(/^([^.!?]{1,64}):$/);
+    if (markdownHeading || boldHeading || labelHeading) {
+      return [{ kind: 'heading' as const, text: (markdownHeading?.[1] ?? boldHeading?.[1] ?? labelHeading?.[1] ?? '').trim() }];
+    }
+
+    const bullet = line.match(/^(?:[-*•]|\d+[.)])\s+(.+)$/);
+    return [{ kind: bullet ? 'bullet' as const : 'paragraph' as const, text: (bullet?.[1] ?? line).replace(/\*\*/g, '') }];
+  });
+}
+
 export default function Ask() {
   const insets = useSafeAreaInsets();
   const {
@@ -50,13 +72,14 @@ export default function Ask() {
     appointments,
     documents,
   } = useUi();
-  const [text, setText] = useState('');
   const [voice, setVoice] = useState(false);
   const [recognizing, setRecognizing] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [historyVisible, setHistoryVisible] = useState(false);
   const [historySearch, setHistorySearch] = useState('');
   const scroll = useRef<ScrollView>(null);
+  const composerInput = useRef<TextInput>(null);
+  const draftText = useRef('');
   const voiceBaseText = useRef('');
   const recognition = useRef<BrowserSpeechRecognition | null>(null);
 
@@ -76,9 +99,10 @@ export default function Ask() {
   }, [bookingNavigationPending, consumeBookingNavigation]);
 
   const submit = async (value?: string) => {
-    const v = (value ?? text).trim();
+    const v = (value ?? draftText.current).trim();
     if (!v || isTyping) return;
-    setText('');
+    draftText.current = '';
+    composerInput.current?.clear();
     setVoice(false);
     setIsTyping(true);
     try {
@@ -145,7 +169,7 @@ export default function Ask() {
       return;
     }
 
-    voiceBaseText.current = text.trim() ? `${text.trim()} ` : '';
+    voiceBaseText.current = draftText.current.trim() ? `${draftText.current.trim()} ` : '';
     try {
       const browserWindow = window as SpeechWindow;
       const SpeechRecognition = browserWindow.SpeechRecognition ?? browserWindow.webkitSpeechRecognition;
@@ -173,7 +197,10 @@ export default function Ask() {
         const transcript = Array.from({ length: event.results.length }, (_, index) =>
           event.results[index]?.[0]?.transcript ?? ''
         ).join('').trim();
-        if (transcript) setText(`${voiceBaseText.current}${transcript}`);
+        if (transcript) {
+          draftText.current = `${voiceBaseText.current}${transcript}`;
+          composerInput.current?.setNativeProps({ text: draftText.current });
+        }
       };
       speechRecognition.onerror = (event) => {
         setRecognizing(false);
@@ -246,6 +273,7 @@ export default function Ask() {
           {messages.map((m) => {
             const mine = m.role === 'user';
             const body = locale === 'ar' ? m.textAr : m.textEn;
+            const answerBlocks = mine ? [] : parseAnswerBlocks(body);
             return (
               <View key={m.id} style={{ marginBottom: 12, alignItems: mine ? (isRTL ? 'flex-start' : 'flex-end') : isRTL ? 'flex-end' : 'flex-start' }}>
 
@@ -259,9 +287,24 @@ export default function Ask() {
                     borderColor: palette.border,
                   }}
                 >
-                  <AppText size={16} style={{ color: mine ? '#fff' : palette.ink }}>
-                    {body}
-                  </AppText>
+                  {mine ? (
+                    <AppText size={16} style={{ color: '#fff' }}>{body}</AppText>
+                  ) : (
+                    <View style={{ gap: 8 }}>
+                      {answerBlocks.map((block, index) => block.kind === 'heading' ? (
+                        <AppText key={`${index}-${block.text}`} size={17} weight="700" style={{ color: palette.tealDark, marginTop: index ? 4 : 0 }}>
+                          {block.text}
+                        </AppText>
+                      ) : block.kind === 'bullet' ? (
+                        <View key={`${index}-${block.text}`} style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'flex-start', gap: 8 }}>
+                          <AppText size={16} weight="700" style={{ color: palette.teal }}>•</AppText>
+                          <AppText size={16} style={{ color: palette.ink, flex: 1 }}>{block.text}</AppText>
+                        </View>
+                      ) : (
+                        <AppText key={`${index}-${block.text}`} size={16} style={{ color: palette.ink }}>{block.text}</AppText>
+                      ))}
+                    </View>
+                  )}
                   {m.role === 'awn' ? (
                     <View style={[row, { marginTop: 8, alignItems: 'center', justifyContent: 'flex-end', gap: 8 }]}>
                       <SpeakBtn text={body} />
@@ -362,30 +405,18 @@ export default function Ask() {
             );
           })}
         </ScrollView>
-        <View
-          style={[
-            row,
-            {
-              backgroundColor: palette.surface,
-              borderRadius: 28,
-              borderWidth: 1,
-              borderColor: palette.border,
-              paddingHorizontal: 10,
-              paddingVertical: 6,
-              marginBottom: 10,
-              alignItems: 'center',
-              gap: 6,
-            },
-          ]}
-        >
-          <Pressable onPress={() => void startVoiceInput()} accessibilityRole="button" accessibilityLabel={locale === 'ar' ? 'إدخال الرسالة بالصوت' : 'Dictate message'} style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: recognizing ? palette.tealDark : palette.mint, alignItems: 'center', justifyContent: 'center' }}>
-            <Ionicons name={recognizing ? 'mic' : 'mic-outline'} size={22} color={recognizing ? '#fff' : palette.tealDark} />
-          </Pressable>
-          <Field value={text} onChange={setText} placeholder={tt('composer')} onSubmit={() => submit()} />
-          <Pressable onPress={() => submit()} accessibilityLabel={tt('send')} style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: palette.tealDark, alignItems: 'center', justifyContent: 'center' }}>
-            <Ionicons name="send" size={18} color="#fff" />
-          </Pressable>
-        </View>
+        <ChatComposer
+          row={row}
+          palette={palette}
+          locale={locale}
+          isRTL={isRTL}
+          tt={tt}
+          recognizing={recognizing}
+          startVoiceInput={startVoiceInput}
+          submit={() => void submit()}
+          composerInput={composerInput}
+          draftText={draftText}
+        />
       </View>
 
       {isTyping ? (
@@ -481,5 +512,57 @@ export default function Ask() {
         </View>
       </Modal>
     </KeyboardAvoidingView>
+  );
+}
+
+type ChatComposerProps = {
+  row: ReturnType<typeof useUi>['row'];
+  palette: ReturnType<typeof useUi>['palette'];
+  locale: ReturnType<typeof useUi>['locale'];
+  isRTL: boolean;
+  tt: (key: 'composer' | 'send') => string;
+  recognizing: boolean;
+  startVoiceInput: () => void;
+  submit: () => void;
+  composerInput: RefObject<TextInput | null>;
+  draftText: { current: string };
+};
+
+function ChatComposer({ row, palette, locale, isRTL, tt, recognizing, startVoiceInput, submit, composerInput, draftText }: ChatComposerProps) {
+  const [inputHeight, setInputHeight] = useState(48);
+  const initialContentHeight = useRef<number | null>(null);
+
+  return (
+    <View style={[row, { backgroundColor: palette.surface, borderRadius: 28, borderWidth: 1, borderColor: palette.border, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 10, alignItems: 'flex-end', gap: 6 }]}>
+      <Pressable onPress={() => startVoiceInput()} accessibilityRole="button" accessibilityLabel={locale === 'ar' ? 'إدخال الرسالة بالصوت' : 'Dictate message'} style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: recognizing ? palette.tealDark : palette.mint, alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={recognizing ? 'mic' : 'mic-outline'} size={22} color={recognizing ? '#fff' : palette.tealDark} />
+      </Pressable>
+      <TextInput
+        ref={composerInput}
+        defaultValue=""
+        onChangeText={(value) => { draftText.current = value; }}
+        onContentSizeChange={(event) => {
+          const contentHeight = event.nativeEvent.contentSize.height;
+          if (initialContentHeight.current === null) initialContentHeight.current = contentHeight;
+          // Grow by the change in text content relative to the initial native
+          // measurement. This accounts for TextInput padding without repeatedly
+          // adding the resized frame back into the next measurement.
+          const contentGrowth = Math.max(0, contentHeight - initialContentHeight.current);
+          const nextHeight = Math.min(132, Math.max(48, Math.ceil(48 + contentGrowth)));
+          setInputHeight((currentHeight) => currentHeight === nextHeight ? currentHeight : nextHeight);
+        }}
+        placeholder={tt('composer')}
+        placeholderTextColor={palette.inkMuted}
+        multiline
+        scrollEnabled={inputHeight >= 132}
+        textAlign={isRTL ? 'right' : 'left'}
+        textAlignVertical="top"
+        accessibilityLabel={tt('composer')}
+        style={{ flex: 1, minHeight: 48, maxHeight: 132, height: inputHeight, paddingHorizontal: 6, paddingVertical: 10, color: palette.ink, fontSize: 16, lineHeight: 23, fontFamily: locale === 'ar' ? 'Cairo_500Medium' : 'IBMPlexSans_500Medium' }}
+      />
+      <Pressable onPress={submit} accessibilityLabel={tt('send')} style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: palette.tealDark, alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name="send" size={18} color="#fff" />
+      </Pressable>
+    </View>
   );
 }

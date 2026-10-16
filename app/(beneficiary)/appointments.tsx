@@ -3,8 +3,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Linking, Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 
-import { API_URL } from '../../src/config';
-import { getSupabaseAccessToken } from '../../src/services/supabaseData';
+import { loadSyncedAppointments } from '../../src/services/supabaseData';
 import MonthCalendar from '../../src/components/MonthCalendar';
 import { formatAppointmentDate, isUpcomingAppointment, localDateKey } from '../../src/services/appointmentTime';
 import {
@@ -112,7 +111,7 @@ export default function Appointments() {
   const {
     tt,
     locale,
-    appointments: localAppointments,
+    appointments,
     mergeAppointments,
     palette,
     row,
@@ -149,67 +148,19 @@ export default function Appointments() {
     useState<string | null>(null);
   const [selectedSymptoms, setSelectedSymptoms] = useState('');
 
-  // Real appointments coming from agent-server
-  const [backendAppointments, setBackendAppointments] =
-    useState<any[]>([]);
-
-  const loadAppointments = useCallback(async () => {
+  const refreshAppointments = useCallback(async () => {
     try {
-      const accessToken = await getSupabaseAccessToken();
-      const response = await fetch(
-        API_URL + '/appointments/booked',
-        {
-          headers: {
-            Authorization: 'Bearer ' + accessToken,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          `Backend returned ${response.status}`
-        );
-      }
-
-      const data = await response.json();
-
-      const savedAppointments = data.appointments ?? [];
-      setBackendAppointments(savedAppointments);
-      mergeAppointments(savedAppointments);
+      mergeAppointments(await loadSyncedAppointments());
     } catch (error) {
-      // console.log instead of console.error so Expo
-      // does not show a large development warning.
-      console.log(
-        'Could not load booked appointments:',
-        error
-      );
+      console.log('Could not load booked appointments from Supabase:', error);
     }
   }, [mergeAppointments]);
 
-  // Reload every time the user opens مواعيدي
   useFocusEffect(
     useCallback(() => {
-      loadAppointments();
-    }, [loadAppointments])
+      void refreshAppointments();
+    }, [refreshAppointments])
   );
-
-  /*
-   * Keep both:
-   *
-   * backendAppointments:
-   * appointments booked through Awn chat.
-   *
-   * localAppointments:
-   * appointments created by the teammate's
-   * existing manual booking UI.
-   */
-  const appointments = [
-    ...new Map(
-      [...backendAppointments, ...localAppointments].map(
-        (appointment) => [appointment.id, appointment]
-      )
-    ).values(),
-  ];
 
   const upcoming = appointments.filter(
     (a) => isUpcomingAppointment(a)
