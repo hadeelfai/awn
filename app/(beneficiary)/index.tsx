@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { Pressable, View } from 'react-native';
+import { buildScheduledDoses, getDoseRecordsForDate, getMedications, type MedicationRecord, type ScheduledDose } from '../../src/services/medications';
 
+import { appointmentDateTime, formatAppointmentDate, getNextAppointment } from '../../src/services/appointmentTime';
 import {
   AppText,
   Card,
@@ -13,7 +15,6 @@ import {
   SpeakBtn,
   useUi,
 } from '../../src/ui';
-import { appointmentDateTime, formatAppointmentDate, getNextAppointment } from '../../src/services/appointmentTime';
 
 export default function Home() {
   const {
@@ -31,6 +32,42 @@ export default function Home() {
     const timer = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(timer);
   }, []);
+  const [medications, setMedications] = useState<MedicationRecord[]>([]);
+  const [todayDoses, setTodayDoses] = useState<ScheduledDose[]>([]);
+  const [medicationLoading, setMedicationLoading] = useState(true);
+  const [medicationError, setMedicationError] = useState(false);
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    const load = async () => {
+      setMedicationLoading(true);
+      try {
+        const nowDate = new Date();
+        const date = `${nowDate.getFullYear()}-${String(nowDate.getMonth()+1).padStart(2,'0')}-${String(nowDate.getDate()).padStart(2,'0')}`;
+        const [meds, records] = await Promise.all([getMedications(), getDoseRecordsForDate(date)]);
+        if (!active) return;
+        setMedications(meds);
+        setTodayDoses(buildScheduledDoses(meds, date, records));
+        setMedicationError(false);
+      } catch (error) {
+        console.warn('Could not load home medication reminders:', error);
+        if (active) setMedicationError(true);
+      } finally {
+        if (active) setMedicationLoading(false);
+      }
+    };
+    void load();
+    return () => { active = false; };
+  }, []));
+  const pendingDoses = todayDoses.filter(d => d.status === 'pending');
+  const nextDose = pendingDoses.find(d => new Date(d.scheduledAt).getTime() >= now);
+  const todayDate = new Date(now);
+  const todayDateString = `${todayDate.getFullYear()}-${String(todayDate.getMonth()+1).padStart(2,'0')}-${String(todayDate.getDate()).padStart(2,'0')}`;
+  const upcomingExpiry = medications
+    .filter(m => m.status === 'active' && m.end_date && m.end_date >= todayDateString)
+    .sort((a,b) => (a.end_date ?? '').localeCompare(b.end_date ?? ''))[0];
+  const expiryDays = upcomingExpiry?.end_date
+    ? Math.round((new Date(`${upcomingExpiry.end_date}T12:00:00`).getTime() - new Date(`${todayDateString}T12:00:00`).getTime()) / 86400000)
+    : null;
   const nextAppointment = getNextAppointment(appointments, new Date(now));
   const daysUntilNext = nextAppointment
     ? Math.max(0, Math.ceil(((appointmentDateTime(nextAppointment)?.getTime() ?? Date.now()) - Date.now()) / 86400000))
@@ -485,49 +522,39 @@ export default function Home() {
         }
       />
 
-      <SmartReminder
-        icon="document-text-outline"
-        title={
-          isArabic
-            ? 'متابعة مقترحة'
-            : 'Follow-up suggested'
-        }
-        description={
-          isArabic
-            ? 'رفعت تقريرًا طبيًا جديدًا، ولم يتم تسجيل موعد متابعة بعد.'
-            : 'You uploaded a new medical report, but no follow-up appointment is recorded.'
-        }
-        action={
-          isArabic
-            ? 'احجز متابعة'
-            : 'Book follow-up'
-        }
-        onPress={() =>
-          router.push('/(beneficiary)/ask')
-        }
-      />
-
-      <SmartReminder
-        icon="medkit-outline"
-        title={
-          isArabic
-            ? 'تذكير بالوصفة'
-            : 'Prescription reminder'
-        }
-        description={
-          isArabic
-            ? 'متبقي 5 أيام على انتهاء وصفة فيتامين D3.'
-            : '5 days remain before your Vitamin D3 prescription ends.'
-        }
-        action={
-          isArabic
-            ? 'عرض التفاصيل'
-            : 'View details'
-        }
-        onPress={() =>
-          router.push('/(beneficiary)/medications')
-        }
-      />
+      {medicationLoading ? (
+        <Card style={{ marginBottom: 12 }}><AppText muted>{isArabic ? 'جارٍ تحميل تذكيرات الأدوية...' : 'Loading medication reminders...'}</AppText></Card>
+      ) : medicationError ? (
+        <Card style={{ marginBottom: 12 }}><AppText muted>{isArabic ? 'تعذر تحميل بيانات الأدوية حاليًا.' : 'Medication data is unavailable right now.'}</AppText></Card>
+      ) : (
+        <>
+          {nextDose && (
+            <SmartReminder
+              icon="medkit-outline"
+              title={isArabic ? 'جرعة مجدولة اليوم' : 'Scheduled dose today'}
+              description={`${nextDose.medicationName} · ${nextDose.dosage} · ${nextDose.time}`}
+              action={isArabic ? 'عرض جرعات اليوم' : 'View today’s doses'}
+              onPress={() => router.push('/(beneficiary)/medications')}
+            />
+          )}
+          {upcomingExpiry && expiryDays !== null && expiryDays <= 7 && (
+            <SmartReminder
+              icon="calendar-outline"
+              title={isArabic ? 'اقتراب نهاية الوصفة' : 'Prescription ending soon'}
+              description={isArabic
+                ? `${upcomingExpiry.name}: ${expiryDays === 0 ? 'تنتهي اليوم' : `متبقي ${expiryDays} يوم`}`
+                : `${upcomingExpiry.name}: ${expiryDays === 0 ? 'ends today' : `${expiryDays} day(s) remaining`}`}
+              action={isArabic ? 'عرض الأدوية' : 'View medications'}
+              onPress={() => router.push('/(beneficiary)/medications')}
+            />
+          )}
+          {!nextDose && !(upcomingExpiry && expiryDays !== null && expiryDays <= 7) && (
+            <Card style={{ marginBottom: 12 }}>
+              <AppText muted>{isArabic ? 'لا توجد تنبيهات أدوية حاليًا.' : 'No medication reminders right now.'}</AppText>
+            </Card>
+          )}
+        </>
+      )}
 
       {/* COMING UP */}
       <SectionHeader
@@ -558,34 +585,14 @@ export default function Home() {
           first
         />
 
-        <TimelineItem
-          icon="medkit-outline"
-          date={
-            isArabic
-              ? '23 سبتمبر'
-              : 'Sep 23'
-          }
-          title={
-            isArabic
-              ? 'انتهاء وصفة فيتامين D3'
-              : 'Vitamin D3 prescription ends'
-          }
-        />
-
-        <TimelineItem
-          icon="document-text-outline"
-          date={
-            isArabic
-              ? 'متابعة'
-              : 'Follow-up'
-          }
-          title={
-            isArabic
-              ? 'تقرير جديد يحتاج مراجعة'
-              : 'New report needs review'
-          }
-          last
-        />
+        {!medicationError && !medicationLoading && upcomingExpiry && (
+          <TimelineItem
+            icon="medkit-outline"
+            date={new Date(`${upcomingExpiry.end_date}T12:00:00`).toLocaleDateString(isArabic ? 'ar-SA-u-ca-gregory' : 'en-US', { day: 'numeric', month: 'short' })}
+            title={isArabic ? `نهاية وصفة ${upcomingExpiry.name}` : `${upcomingExpiry.name} prescription ends`}
+            last
+          />
+        )}
       </Card>
 
       {/* DEMO NOTE */}

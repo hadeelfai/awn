@@ -4,14 +4,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React from 'react';
 import {
-    Pressable,
-    ScrollView,
-    Text,
-    TextInput,
-    View,
-    type StyleProp,
-    type TextStyle,
-    type ViewStyle,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+  type StyleProp,
+  type TextStyle,
+  type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { I18nKey, t } from './i18n';
@@ -178,7 +178,7 @@ export function TopBar({
       <View style={[row, { alignItems: 'center', gap: 10, flex: 1 }]}>
         {back ? (
           <Pressable
-            onPress={onBack ?? (() => router.back())}
+            onPress={onBack ?? (() => { if (router.canGoBack()) router.back(); else router.replace('/(beneficiary)'); })}
             accessibilityLabel={tt('back')}
             hitSlop={12}
             style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: palette.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: palette.border }}

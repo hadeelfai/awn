@@ -21,7 +21,13 @@ export default function BeneficiaryLayout() {
       <Tabs.Screen name="appointment/[id]" options={{ href: null }} />
       <Tabs.Screen name="report/[id]" options={{ href: null }} />
       <Tabs.Screen name="settings" options={{ href: null }} />
+
       <Tabs.Screen name="notifications" options={{ href: null }} />
+      <Tabs.Screen
+  name="medication-details"
+  options={{ href: null }}
+/>
+      <Tabs.Screen name="medication-add" options={{ href: null }} />
     </Tabs>
   );
 }
