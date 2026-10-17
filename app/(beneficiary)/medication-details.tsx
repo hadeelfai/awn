@@ -183,7 +183,7 @@ export default function MedicationDetails() {
 
   return (
     <Screen scroll>
-      <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/medications'); }} style={{ marginTop: 12, marginBottom: 20 }}>
+      <Pressable onPress={() => router.replace('/medications')} style={{ marginTop: 12, marginBottom: 20 }}>
         <AppText style={{ color: palette.tealDark }}>{ar ? '→ رجوع' : '← Back'}</AppText>
       </Pressable>
 

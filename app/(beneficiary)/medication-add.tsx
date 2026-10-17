@@ -448,7 +448,7 @@ if (isEditing && id) {
           {
             text: ar ? 'حسنًا' : 'OK',
             onPress: () => {
-              if (isEditing && router.canGoBack()) router.back();
+              if (isEditing && id) router.replace({ pathname: '/medication-details', params: { id } });
               else router.replace('/medications');
             },
           },
@@ -469,7 +469,7 @@ if (isEditing && id) {
   return (
     <Screen scroll>
       <Pressable
-        onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/medications'); }}
+        onPress={() => { if (isEditing && id) router.replace({ pathname: '/medication-details', params: { id } }); else router.replace('/medications'); }}
         style={{ marginTop: 12, marginBottom: 12 }}
       >
         <AppText style={{ color: palette.tealDark }}>
